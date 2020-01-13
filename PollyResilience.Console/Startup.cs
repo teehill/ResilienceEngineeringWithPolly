@@ -22,7 +22,7 @@ namespace PollyResilience.Console
         }
 
 
-        public void ConfigureServices(IServiceCollection services)
+        public ServiceProvider ConfigureServices(IServiceCollection services)
         {
             services.AddSingleton<IConfigurationRoot>(Configuration);
 
@@ -35,6 +35,8 @@ namespace PollyResilience.Console
             });
 
             services.AddTransient<ConsoleApp>();
+
+            return services.BuildServiceProvider();
         }
     }
 }

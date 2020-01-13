@@ -19,6 +19,7 @@ namespace PollyResilience.Console
             var DependencyURL = _config.DependencyURL;
 
             _logger.LogCritical(DependencyURL);
+            _logger.LogWarning(DependencyURL);
 
             System.Console.ReadKey();
         }

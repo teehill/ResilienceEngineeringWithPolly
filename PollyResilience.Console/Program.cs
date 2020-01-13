@@ -1,4 +1,3 @@
-using System;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace PollyResilience.Console
@@ -7,12 +6,11 @@ namespace PollyResilience.Console
     {
         static void Main(string[] args)
         {
-            IServiceCollection services = new ServiceCollection();
+            var services = new ServiceCollection();
 
-            Startup startup = new Startup();
-            startup.ConfigureServices(services);
+            var startup = new Startup();
 
-            IServiceProvider serviceProvider = services.BuildServiceProvider();
+            var serviceProvider = startup.ConfigureServices(services);
 
             // entry to run app
             serviceProvider.GetService<ConsoleApp>().Run();
