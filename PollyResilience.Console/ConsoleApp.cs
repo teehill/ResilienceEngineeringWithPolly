@@ -1,25 +1,36 @@
-﻿using System;
+﻿using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using PollyResilience.Service;
 
 namespace PollyResilience.Console
 {
     public class ConsoleApp
     {
-        private readonly ILogger<ConsoleApp> _logger;
-        private readonly IPollyConfiguration _config;
+        protected readonly ILogger<ConsoleApp> _logger;
+        protected readonly IPollyConfiguration _config;
 
-        public ConsoleApp(IPollyConfiguration configurationRoot, ILogger<ConsoleApp> logger)
+        protected readonly IPollyResilienceService _pollyService;
+
+        public ConsoleApp(IPollyConfiguration configurationRoot, ILogger<ConsoleApp> logger, IPollyResilienceService pollyService)
         {
             _logger = logger;
             _config = configurationRoot;
+            _pollyService = pollyService;
         }
 
-        public void Run()
+        public async Task Run()
         {
-            var DependencyURL = _config.DependencyURL;
+            var repositories = await _pollyService.ProcessRepositories();
 
-            _logger.LogCritical(DependencyURL);
-            _logger.LogWarning(DependencyURL);
+            System.Console.WriteLine("Repos motherfuckers!");
+            System.Console.WriteLine("----------------------------------------------");
+
+            foreach (var repo in repositories) {
+                System.Console.WriteLine($"{repo.Name} | {repo.Description}");
+                System.Console.WriteLine($"{repo.GitHubHomeUrl} | {repo.Homepage}");
+                System.Console.WriteLine($"{repo.Watchers} | {repo.LastPush}");
+                System.Console.WriteLine("----------------------------------------------");
+            }
 
             System.Console.ReadKey();
         }
