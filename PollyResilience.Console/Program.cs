@@ -1,29 +1,25 @@
+using System;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace PollyResilience.Console
 {
     public class Program
     {
-        static async Task Main(string[] args)
-        {
-            await CreateHostBuilder(args).Build().RunAsync();
+        private static IServiceProvider _serviceProvider;
 
-            /*var services = new ServiceCollection();
+        public static async Task Main(string[] args)
+        {
+            var services = new ServiceCollection();
 
             var startup = new Startup();
 
-            var serviceProvider = startup.ConfigureServices(services);
+            _serviceProvider = startup.ConfigureServices(services);
 
-            await serviceProvider.GetService<ConsoleApp>().Run();*/
+            await _serviceProvider.GetService<ConsoleApp>().Run();
         }
 
-        public static IHostBuilder CreateHostBuilder(string[] args) => 
-            Host.CreateDefaultBuilder(args).ConfigureWebHostDefaults(webBuilder =>
-            {
-                webBuilder.UseStartup<Startup>();
-            });
+
 
         public static int Add(int a, int b)
         {

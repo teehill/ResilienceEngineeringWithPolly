@@ -1,7 +1,9 @@
 using System;
 using System.IO;
+using System.Net.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NLog.Extensions.Logging;
 using Polly;
 using Polly.Extensions.Http;
@@ -14,45 +16,62 @@ namespace PollyResilience.Console
     {
         protected static string baseDir = Directory.GetCurrentDirectory();
 
-        protected IConfiguration _configuration { get; }
+        protected IConfigurationRoot _configuration { get; }
 
-        public Startup(IConfiguration configuration)
+        public Startup()
         {
-            _configuration = configuration;
-            /*var builder = new ConfigurationBuilder();
+            var builder = new ConfigurationBuilder();
             builder.SetBasePath(baseDir);
             builder.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
-
-            Configuration = builder.Build();*/
+            _configuration = builder.Build();
         }
 
 
         public ServiceProvider ConfigureServices(IServiceCollection services)
         {
-            services.AddSingleton<IConfiguration>(_configuration);
+            services.AddSingleton(_configuration);
 
-            services.AddSingleton<IPollyConfiguration, PollyConfiguration>(); 
+            services.AddSingleton<IPollyConfiguration, PollyConfiguration>();
 
             services.AddTransient<IPollyResilienceService, PollyResilienceService>();
 
-            services.AddLogging(loggingBuilder => {
+            services.AddLogging(loggingBuilder =>
+            {
                 loggingBuilder.AddNLog($"{baseDir}/nlog.config");
             });
 
             services.AddTransient<ConsoleApp>();
 
+            var logger = services.BuildServiceProvider().GetService<ILogger<ConsoleApp>>();
+
             var retryPolicy = HttpPolicyExtensions
                 .HandleTransientHttpError()
-                .Or<TimeoutRejectedException>() // thrown by Polly's TimeoutPolicy if the inner execution times out
-                .RetryAsync(3);
+                .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(1), (exception, timeSpan, retryCount, context) =>
+                {
+                    logger.Log(LogLevel.Error, $"Redis error on retry {retryCount} for {context.PolicyKey}", exception);
+                });
 
-            services.AddHttpClient<RepoService>(c =>
+            var circuitBreaker = HttpPolicyExtensions.HandleTransientHttpError()
+                .CircuitBreakerAsync(handledEventsAllowedBeforeBreaking: 1,
+                    durationOfBreak: TimeSpan.FromSeconds(120),
+                    onHalfOpen: () => { logger.Log(LogLevel.Information, "Git repo http client breaker: half open"); },
+                    onBreak: (ex, ts) => { logger.Log(LogLevel.Information, $"Git repo http client circuit breaker: open for {ts.TotalSeconds} seconds"); },
+                    onReset: () => { logger.Log(LogLevel.Information, $"Git repo http client circuit breaker: closed"); }
+                );
+
+            services.AddHttpClient<IRepoService,RepoService>(client =>
             {
-                c.BaseAddress = new Uri("https://api.github.com/");
-                c.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json");
-                c.DefaultRequestHeaders.Add("User-Agent", "HttpClientFactory-Sample");
-            });
-            
+                client.BaseAddress = new Uri("https://api.github.com/");
+                client.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json");
+                client.DefaultRequestHeaders.Add("User-Agent", "HttpClientFactory-Sample");
+            }).AddPolicyHandler(retryPolicy).AddPolicyHandler(circuitBreaker);
+
+
+            var timeout = Policy.TimeoutAsync<HttpResponseMessage>(
+                TimeSpan.FromSeconds(10));
+            var longTimeout = Policy.TimeoutAsync<HttpResponseMessage>(
+                TimeSpan.FromSeconds(30));
+
             var registry = services.AddPolicyRegistry();
 
             registry.Add("regular", timeout);

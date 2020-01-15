@@ -11,7 +11,9 @@ namespace PollyResilience.Console
 
         protected readonly IPollyResilienceService _pollyService;
 
-        public ConsoleApp(IPollyConfiguration configurationRoot, ILogger<ConsoleApp> logger, IPollyResilienceService pollyService)
+        public ConsoleApp(IPollyConfiguration configurationRoot,
+            ILogger<ConsoleApp> logger,
+            IPollyResilienceService pollyService)
         {
             _logger = logger;
             _config = configurationRoot;
@@ -22,14 +24,14 @@ namespace PollyResilience.Console
         {
             var repositories = await _pollyService.ProcessRepositories();
 
-            System.Console.WriteLine("Repos motherfuckers!");
-            System.Console.WriteLine("----------------------------------------------");
+            _logger.LogInformation("Repos");
+            _logger.LogInformation("----------------------------------------------");
 
             foreach (var repo in repositories) {
-                System.Console.WriteLine($"{repo.Name} | {repo.Description}");
-                System.Console.WriteLine($"{repo.GitHubHomeUrl} | {repo.Homepage}");
-                System.Console.WriteLine($"{repo.Watchers} | {repo.LastPush}");
-                System.Console.WriteLine("----------------------------------------------");
+                _logger.LogInformation($"{repo.Name} | {repo.Description}");
+                _logger.LogInformation($"{repo.GitHubHomeUrl} | {repo.Homepage}");
+                _logger.LogInformation($"{repo.Watchers} | {repo.LastPush}");
+                _logger.LogInformation("----------------------------------------------");
             }
 
             System.Console.ReadKey();

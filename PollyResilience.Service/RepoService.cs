@@ -2,9 +2,16 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
+using PollyResilience.Service.Models;
 
 namespace PollyResilience.Service
-{    public class RepoService
+{
+    public interface IRepoService
+    {
+        Task<IEnumerable<Repository>> GetRepos();
+    }
+
+    public class RepoService : IRepoService
     {
         private readonly HttpClient _httpClient;
 
@@ -13,15 +20,12 @@ namespace PollyResilience.Service
             _httpClient = client;
         }
 
-        public async Task<IEnumerable<string>> GetRepos()
+        public async Task<IEnumerable<Repository>> GetRepos()
         {
-            var response = await _httpClient.GetAsync("aspnet/repos");
+            var streamTask = _httpClient.GetStreamAsync("orgs/dotnet/repos");
 
-            response.EnsureSuccessStatusCode();
+            return await JsonSerializer.DeserializeAsync<IEnumerable<Repository>>(await streamTask);
 
-            using var responseStream = await response.Content.ReadAsStreamAsync();
-            return await JsonSerializer.DeserializeAsync
-                <IEnumerable<string>>(responseStream);
         }
     }
 }
