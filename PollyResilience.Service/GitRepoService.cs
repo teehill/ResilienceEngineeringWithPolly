@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -11,11 +11,11 @@ namespace PollyResilience.Service
         Task<IEnumerable<Repository>> GetRepos();
     }
 
-    public class RepoService : IRepoService
+    public class GitRepoService : IRepoService
     {
         private readonly HttpClient _httpClient;
 
-        public RepoService(HttpClient client)
+        public GitRepoService(HttpClient client)
         {
             _httpClient = client;
         }

@@ -8,23 +8,27 @@ namespace PollyResilience.Console
     {
         protected readonly ILogger<ConsoleApp> _logger;
         protected readonly IPollyConfiguration _config;
-
         protected readonly IPollyResilienceService _pollyService;
+        protected readonly IRedisClient _redisClient;
 
         public ConsoleApp(IPollyConfiguration configurationRoot,
             ILogger<ConsoleApp> logger,
-            IPollyResilienceService pollyService)
+            IPollyResilienceService pollyService,
+            IRedisClient redisClient)
         {
             _logger = logger;
             _config = configurationRoot;
             _pollyService = pollyService;
+            _redisClient = redisClient;
         }
 
         public async Task Run()
         {
+            _redisClient.Subscribe("repos");
+
             var repositories = await _pollyService.ProcessRepositories();
 
-            _logger.LogInformation("Repos");
+            _logger.LogInformation("Repositories");
             _logger.LogInformation("----------------------------------------------");
 
             foreach (var repo in repositories) {
@@ -32,7 +36,11 @@ namespace PollyResilience.Console
                 _logger.LogInformation($"{repo.GitHubHomeUrl} | {repo.Homepage}");
                 _logger.LogInformation($"{repo.Watchers} | {repo.LastPush}");
                 _logger.LogInformation("----------------------------------------------");
+
+                _redisClient.Publish("repos", repo.GitHubHomeUrl.ToString());
             }
+
+
 
             System.Console.ReadKey();
         }

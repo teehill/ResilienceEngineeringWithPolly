@@ -7,8 +7,9 @@ using Microsoft.Extensions.Logging;
 using NLog.Extensions.Logging;
 using Polly;
 using Polly.Extensions.Http;
-using Polly.Timeout;
+using Polly.Contrib.Simmy;
 using PollyResilience.Service;
+using Polly.Contrib.Simmy.Outcomes;
 
 namespace PollyResilience.Console
 {
@@ -33,6 +34,8 @@ namespace PollyResilience.Console
 
             services.AddSingleton<IPollyConfiguration, PollyConfiguration>();
 
+            services.AddSingleton<IRedisClient, RedisClient>();
+
             services.AddTransient<IPollyResilienceService, PollyResilienceService>();
 
             services.AddLogging(loggingBuilder =>
@@ -46,6 +49,7 @@ namespace PollyResilience.Console
 
             var retryPolicy = HttpPolicyExtensions
                 .HandleTransientHttpError()
+                .Or<System.Net.Sockets.SocketException>()
                 .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(1), (exception, timeSpan, retryCount, context) =>
                 {
                     logger.Log(LogLevel.Error, $"Redis error on retry {retryCount} for {context.PolicyKey}", exception);
@@ -59,12 +63,37 @@ namespace PollyResilience.Console
                     onReset: () => { logger.Log(LogLevel.Information, $"Git repo http client circuit breaker: closed"); }
                 );
 
-            services.AddHttpClient<IRepoService,RepoService>(client =>
+             var fallbackForAnyException = Policy<string>
+                .Handle<Exception>()
+                .FallbackAsync(
+                    fallbackAction: async ct =>
+                    {
+                        await System.Threading.Tasks.Task.FromResult(true);
+                        return "Please try again later [Fallback for any exception]";
+                    },
+                    onFallbackAsync: async e =>
+                    {
+                        await System.Threading.Tasks.Task.FromResult(true);
+                        logger.Log(LogLevel.Error, "Fallback catches eventually failed with: " + e.Exception.Message, System.Drawing.Color.Red);
+                    }
+                );
+
+            var fault = new System.Net.Sockets.SocketException(errorCode: 10013);
+            var chaosPolicy = MonkeyPolicy.InjectExceptionAsync(with =>
+                with.Fault(fault)
+                    .InjectionRate(.1)
+                    .Enabled()
+                );
+
+            var pol = retryPolicy.WrapAsync(circuitBreaker)
+                .WrapAsync(chaosPolicy);
+
+            services.AddHttpClient<IRepoService,GitRepoService>(client =>
             {
                 client.BaseAddress = new Uri("https://api.github.com/");
                 client.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json");
                 client.DefaultRequestHeaders.Add("User-Agent", "HttpClientFactory-Sample");
-            }).AddPolicyHandler(retryPolicy).AddPolicyHandler(circuitBreaker);
+            }).AddPolicyHandler(pol);
 
 
             var timeout = Policy.TimeoutAsync<HttpResponseMessage>(
