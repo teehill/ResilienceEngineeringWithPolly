@@ -51,9 +51,9 @@ namespace RedisPublisher
 
             var retryPolicy = Policy.Handle<RedisConnectionException>()
                 .Or<SocketException>()
-                .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(1), (exception, timeSpan, retryCount, context) =>
+                .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromMilliseconds(10), (exception, timeSpan, retryCount, context) =>
                 {
-                    logger.Log(LogLevel.Error, $"Publisher error on retry {retryCount} for {context.PolicyKey}", exception);
+                    logger.Log(LogLevel.Information, $"Publisher error ({exception.GetType().ToString()}) on retry {retryCount} for {timeSpan.ToString()}", exception);
                 });
 
             var fault = new SocketException(errorCode: 10013);

@@ -27,7 +27,8 @@ namespace RedisSubscriber
                 Console.Clear();
 
                 Console.Write(value.ToString());
-                //await Task.Delay(500);
+                
+                await Task.Delay(100);
             });
 
             Console.ReadLine();

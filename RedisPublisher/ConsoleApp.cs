@@ -1,7 +1,12 @@
 ﻿using System;
 using System.Linq;
+using System.Net.Sockets;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Polly;
+using Polly.CircuitBreaker;
+using Polly.Wrap;
+using StackExchange.Redis;
 using PollyResilience.Service;
 
 namespace RedisPublisher
@@ -23,11 +28,24 @@ namespace RedisPublisher
 
         public async Task Run()
         {
+            var redisFallbackPolicyString = Policy<string>.Handle<RedisConnectionException>()
+                .Or<SocketException>()
+                .FallbackAsync(
+                    fallbackValue: null,
+                    onFallbackAsync: async b => {
+                        await Task.FromResult(true);
+                        _logger.Log(LogLevel.Error, $"Fallback caught a '{b.Exception.GetType().ToString()}': '{b.Exception.Message}'");
+                        return; 
+                    });
+
             var i = 0;
 
             while (true)
             {
-                await _redisClient.PublishAsync("messages", messages[i]);
+                await redisFallbackPolicyString.ExecuteAsync(async () => {
+                    await _redisClient.PublishAsync("messages", messages[i]);
+                    return string.Empty;
+                });
 
                 await Task.Delay(600);
 
