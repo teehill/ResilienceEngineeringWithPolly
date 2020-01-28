@@ -7,6 +7,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NLog.Extensions.Logging;
 using Polly;
+using Polly.Contrib.Simmy;
+using Polly.Contrib.Simmy.Outcomes;
 using Polly.Extensions.Http;
 using PollyResilience.Service;
 using StackExchange.Redis;
@@ -54,7 +56,21 @@ namespace RedisPublisher
                     logger.Log(LogLevel.Error, $"Publisher error on retry {retryCount} for {context.PolicyKey}", exception);
                 });
 
-            services.AddSingleton<IAsyncPolicy>(retryPolicy);
+            var fault = new SocketException(errorCode: 10013);
+
+            double faultRate = 0;
+            
+            Double.TryParse(_configuration["FaultRate"], out faultRate);
+            
+            var chaosPolicy = MonkeyPolicy.InjectExceptionAsync(with =>
+                with.Fault(fault)
+                    .InjectionRate(faultRate)
+                    .Enabled()
+                );
+
+            var policy = retryPolicy.WrapAsync(chaosPolicy);
+
+            services.AddSingleton<IAsyncPolicy>(policy);
 
             return services.BuildServiceProvider();
         }

@@ -2,10 +2,10 @@ using Microsoft.Extensions.Configuration;
 
 namespace RedisSubscriber
 {
-    public class PollyConfiguration : IPollyConfiguration
+    public class SubscriberConfiguration : ISubscriberConfiguration
     {
         IConfigurationRoot _configurationRoot;
-        public PollyConfiguration(IConfigurationRoot configurationRoot)
+        public SubscriberConfiguration(IConfigurationRoot configurationRoot)
         {
             _configurationRoot = configurationRoot;
         }
@@ -14,7 +14,7 @@ namespace RedisSubscriber
         public string NLogConfig => _configurationRoot["NLogConfig"];
     }
 
-    public interface IPollyConfiguration
+    public interface ISubscriberConfiguration
     {
         string DependencyURL { get; }
         string NLogConfig { get; }

@@ -35,8 +35,6 @@ namespace RedisPublisher
                     i = 0;
                 else
                     i++;
-
-                //Console.ReadKey();
             }
         }
 

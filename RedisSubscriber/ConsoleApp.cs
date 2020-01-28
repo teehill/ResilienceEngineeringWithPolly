@@ -8,10 +8,10 @@ namespace RedisSubscriber
     public class ConsoleApp
     {
         protected readonly ILogger<ConsoleApp> _logger;
-        protected readonly IPollyConfiguration _config;
+        protected readonly ISubscriberConfiguration _config;
         protected readonly IRedisClient _redisClient;
 
-        public ConsoleApp(IPollyConfiguration configurationRoot,
+        public ConsoleApp(ISubscriberConfiguration configurationRoot,
             ILogger<ConsoleApp> logger,
             IRedisClient redisClient)
         {
@@ -27,8 +27,7 @@ namespace RedisSubscriber
                 Console.Clear();
 
                 Console.Write(value.ToString());
-                
-                await Task.Delay(500);
+                //await Task.Delay(500);
             });
 
             Console.ReadLine();

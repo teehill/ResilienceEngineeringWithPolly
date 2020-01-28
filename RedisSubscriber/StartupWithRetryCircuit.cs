@@ -32,7 +32,7 @@ namespace RedisSubscriber
         {
             services.AddSingleton(_configuration);
 
-            services.AddSingleton<IPollyConfiguration, PollyConfiguration>();
+            services.AddSingleton<ISubscriberConfiguration, SubscriberConfiguration>();
 
             services.AddSingleton<IRedisClient, RedisClient>();
 

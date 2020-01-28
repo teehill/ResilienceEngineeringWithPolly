@@ -56,14 +56,20 @@ namespace PollyResilience.Service
 
         public async Task SubscribeAsync(string channel, Action<RedisChannel, RedisValue> handler)
         {
-            _subscriber.UnsubscribeAll();
+            await _policy.ExecuteAsync(async () =>
+            {
+                _subscriber.UnsubscribeAll();
 
-            await _subscriber.SubscribeAsync(channel, handler);
+                await _subscriber.SubscribeAsync(channel, handler);
+            });
         }
 
         public async Task PublishAsync(string channel, string message)
         {
-            await _subscriber.PublishAsync(channel, message);
+            await _policy.ExecuteAsync(async () =>
+            {
+                await _subscriber.PublishAsync(channel, message);
+            });
         }
 
         protected Lazy<ConnectionMultiplexer> CreateMultiplexer()
