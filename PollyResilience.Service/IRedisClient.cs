@@ -1,17 +1,19 @@
+using StackExchange.Redis;
 using System;
+using System.Threading.Tasks;
 
 namespace PollyResilience.Service
 {
     public interface IRedisClient
     {
-        bool Store(string key, string value, TimeSpan expiresAt);
+        Task<bool> StoreAsync(string key, string value, TimeSpan expiresAt);
 
-        string Get(string key);
+        Task<string> GetAsync(string key);
 
-        bool Remove(string key);
+        Task<bool> RemoveAsync(string key);
 
-        void Subscribe(string channel);
-        
-        void Publish(string channel, string message);
+        Task SubscribeAsync(string channel, Action<RedisChannel, RedisValue> handler);
+
+        Task PublishAsync(string channel, string message);
     }
 }

@@ -2,7 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace PollyResilience.Console
+namespace RedisSubscriber
 {
     public class Program
     {
@@ -12,18 +12,11 @@ namespace PollyResilience.Console
         {
             var services = new ServiceCollection();
 
-            var startup = new Startup();
+            var startup = new StartupWithRetry();
 
             _serviceProvider = startup.ConfigureServices(services);
 
             await _serviceProvider.GetService<ConsoleApp>().Run();
-        }
-
-
-
-        public static int Add(int a, int b)
-        {
-            return a + b;
         }
     }
 }

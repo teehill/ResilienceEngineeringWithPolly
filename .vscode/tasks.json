@@ -7,7 +7,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/PollyResilience.Console/PollyResilience.Console.csproj",
+                "${workspaceFolder}/RedisSubscriber/RedisSubscriber.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],
@@ -19,7 +19,7 @@
             "type": "process",
             "args": [
                 "publish",
-                "${workspaceFolder}/PollyResilience.Console/PollyResilience.Console.csproj",
+                "${workspaceFolder}/RedisSubscriber/RedisSubscriber.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],
@@ -32,7 +32,7 @@
             "args": [
                 "watch",
                 "run",
-                "${workspaceFolder}/PollyResilience.Console/PollyResilience.Console.csproj",
+                "${workspaceFolder}/RedisSubscriber/RedisSubscriber.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],

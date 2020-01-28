@@ -5,10 +5,11 @@
     <NullableContextOptions>enable</NullableContextOptions>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Http" Version="3.1.0"/>
-    <PackageReference Include="System.Text.Json" Version="4.7.0"/>
-    <PackageReference Include="Polly" Version="7.2.0"/>
-    <PackageReference Include="Polly.Extensions.Http" Version="3.0.0"/>
-    <PackageReference Include="StackExchange.Redis" Version="2.0.601"/>
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="3.1.1" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="3.1.1" />
+    <PackageReference Include="System.Text.Json" Version="4.7.0" />
+    <PackageReference Include="Polly" Version="7.2.0" />
+    <PackageReference Include="Polly.Extensions.Http" Version="3.0.0" />
+    <PackageReference Include="StackExchange.Redis" Version="2.0.601" />
   </ItemGroup>
 </Project>

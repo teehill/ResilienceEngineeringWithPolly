@@ -13,7 +13,7 @@
     <PackageReference Include="FakeItEasy" Version="5.5.0" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\PollyResilience.Console\PollyResilience.Console.csproj" />
+    <ProjectReference Include="..\RedisSubscriber\RedisSubscriber.csproj" />
     <ProjectReference Include="..\PollyResilience.Service\PollyResilience.Service.csproj" />
   </ItemGroup>
 </Project>

@@ -9,7 +9,7 @@ namespace PollyResilienceConsole.Tests
         [InlineData(1,2,3)]
         public void Should_Return_Provided_Int(int x, int y, int z)
         {
-            var result = PollyResilience.Console.ConsoleApp.Add(x, y);
+            var result = RedisSubscriber.ConsoleApp.Add(x, y);
 
             Assert.Equal(z, result);
         }

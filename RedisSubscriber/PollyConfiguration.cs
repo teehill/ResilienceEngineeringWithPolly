@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
 
-namespace PollyResilience.Console
+namespace RedisSubscriber
 {
     public class PollyConfiguration : IPollyConfiguration
     {
@@ -17,5 +17,6 @@ namespace PollyResilience.Console
     public interface IPollyConfiguration
     {
         string DependencyURL { get; }
+        string NLogConfig { get; }
     }
 }
