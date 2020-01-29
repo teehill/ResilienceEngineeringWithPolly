@@ -19,7 +19,10 @@ namespace PollyResilience.Service
         protected readonly IAsyncPolicy _policy;
         protected readonly PolicyWrap<string> _retryCircuitStringFallback;
 
-        public RedisClient(ILogger<RedisClient> logger, IConfigurationRoot configuration, IAsyncPolicy policy)
+        public RedisClient(
+            ILogger<RedisClient> logger, 
+            IConfigurationRoot configuration, 
+            IAsyncPolicy policy)
         {
             _logger = logger;
             _configuration = configuration;

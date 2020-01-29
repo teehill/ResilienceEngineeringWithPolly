@@ -6,6 +6,8 @@ using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.CircuitBreaker;
 using Polly.Wrap;
+using Polly.Contrib.Simmy;
+using Polly.Contrib.Simmy.Behavior;
 using StackExchange.Redis;
 using PollyResilience.Service;
 
@@ -38,11 +40,19 @@ namespace RedisPublisher
                         return; 
                     });
 
+            var chaosPolicy = MonkeyPolicy.InjectBehaviourAsync<string>(with =>
+                with.Behaviour(InjectMonkey)
+                    .InjectionRate(0.1)
+                    .Enabled()
+            );
+
+            var policy = redisFallbackPolicyString.WrapAsync(chaosPolicy);
+
             var i = 0;
 
             while (true)
             {
-                await redisFallbackPolicyString.ExecuteAsync(async () => {
+                await policy.ExecuteAsync(async () => {
                     await _redisClient.PublishAsync("messages", messages[i]);
                     return string.Empty;
                 });
@@ -56,19 +66,15 @@ namespace RedisPublisher
             }
         }
 
-
+        public async Task InjectMonkey()
+        {
+            await _redisClient.PublishAsync("messages", monkeyMessage);
+            await Task.Delay(2000);
+            _logger.Log(LogLevel.Information, $"Injected monkey ook ook");
+            return;
+        }
 
         protected string[] messages => new string[] {
-@"
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░",
 @"
 ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
 ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
@@ -79,6 +85,16 @@ namespace RedisPublisher
 ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
 ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
 ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒",
+@"
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░",
 @"
 ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
 ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
@@ -138,5 +154,15 @@ $$/        $$$$$$/  $$$$$$$$/ $$$$$$$$/ $$/     ",
 | $$       \$$    $$| $$     \| $$     \| $$    
  \$$        \$$$$$$  \$$$$$$$$ \$$$$$$$$ \$$    "
 };
+
+        protected readonly string monkeyMessage = @"
+            .-`-.            .-`-.             
+          _/_-.-_\_        _/.-.-.\_           
+         / __} {__ \      /|( o o )|\          
+        / //  *  \\ \    | //  *  \\ |         
+       / / \'---'/ \ \  / / \'---'/ \ \        
+       \ \_/`'''`\_/ /  \ \_/`'''`\_/ /        
+        \           /    \           /         
+                                               ";
     }
 }

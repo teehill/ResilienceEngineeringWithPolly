@@ -9,6 +9,7 @@ using NLog.Extensions.Logging;
 using Polly;
 using Polly.Contrib.Simmy;
 using Polly.Contrib.Simmy.Outcomes;
+using Polly.Contrib.Simmy.Latency;
 using Polly.Extensions.Http;
 using PollyResilience.Service;
 using StackExchange.Redis;
@@ -18,7 +19,6 @@ namespace RedisPublisher
     public class Startup
     {
         protected static string baseDir = Directory.GetCurrentDirectory();
-
         protected IConfigurationRoot _configuration { get; }
 
         public Startup()
@@ -47,32 +47,51 @@ namespace RedisPublisher
 
             services.AddTransient<ConsoleApp>();
 
-            var logger = services.BuildServiceProvider().GetService<ILogger<ConsoleApp>>();
+            var serviceProvider = services.BuildServiceProvider();
+            var logger = serviceProvider.GetService<ILogger<ConsoleApp>>();
+
+            var resiliencyConfiguration = _configuration.GetSection("ResiliencyConfiguration").Get<ResiliencyConfiguration>();
 
             var retryPolicy = Policy.Handle<RedisConnectionException>()
                 .Or<SocketException>()
-                .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromMilliseconds(10), (exception, timeSpan, retryCount, context) =>
+                .WaitAndRetryAsync(
+                    resiliencyConfiguration.RetryCount, 
+                    retryAttempt => TimeSpan.FromMilliseconds(resiliencyConfiguration.RetryDelayMilliseconds),
+                    (exception, timeSpan, retryCount, context) =>
                 {
                     logger.Log(LogLevel.Information, $"Publisher error ({exception.GetType().ToString()}) on retry {retryCount} for {timeSpan.ToString()}", exception);
                 });
 
             var fault = new SocketException(errorCode: 10013);
 
-            double faultRate = 0;
-            
-            Double.TryParse(_configuration["FaultRate"], out faultRate);
-            
-            var chaosPolicy = MonkeyPolicy.InjectExceptionAsync(with =>
+            var chaosPolicy = MonkeyPolicy.InjectExceptionAsync(with => 
                 with.Fault(fault)
-                    .InjectionRate(faultRate)
+                    .InjectionRate(resiliencyConfiguration.FaultRate)
                     .Enabled()
                 );
 
-            var policy = retryPolicy.WrapAsync(chaosPolicy);
+            var chaosLatencyPolicy = MonkeyPolicy.InjectLatencyAsync(with =>
+                with.Latency(TimeSpan.FromMilliseconds(resiliencyConfiguration.LatencyMilliseconds))
+                    .InjectionRate(resiliencyConfiguration.LatencyInjectionRate)
+                    .Enabled()
+                );
+
+            var policy = retryPolicy.WrapAsync(chaosPolicy).WrapAsync(chaosLatencyPolicy);
 
             services.AddSingleton<IAsyncPolicy>(policy);
 
             return services.BuildServiceProvider();
         }
+    }
+
+    public class ResiliencyConfiguration
+    {
+        public int RetryCount { get; set; }
+        public int RetryDelayMilliseconds {get; set;}
+        public double FaultRate {get; set;}
+
+        public int LatencyMilliseconds { get; set; }
+
+        public double LatencyInjectionRate { get; set; }
     }
 }
