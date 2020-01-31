@@ -40,7 +40,7 @@ namespace RedisSubscriber
 
             services.AddLogging(loggingBuilder =>
             {
-                loggingBuilder.AddNLog(_configuration["NLogConfig"]);
+                loggingBuilder.AddNLog($"{baseDir}\\nlog.config");
             });
 
             services.AddTransient<ConsoleApp>();

@@ -1,10 +1,10 @@
+using System;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Wrap;
 using StackExchange.Redis;
-using System;
-using System.Threading.Tasks;
 
 namespace PollyResilience.Service
 {
@@ -20,8 +20,8 @@ namespace PollyResilience.Service
         protected readonly PolicyWrap<string> _retryCircuitStringFallback;
 
         public RedisClient(
-            ILogger<RedisClient> logger, 
-            IConfigurationRoot configuration, 
+            ILogger<RedisClient> logger,
+            IConfigurationRoot configuration,
             IAsyncPolicy policy)
         {
             _logger = logger;

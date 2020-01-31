@@ -1,17 +1,13 @@
 using System;
 using System.IO;
-using System.Net.Http;
+using System.Net.Sockets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NLog.Extensions.Logging;
 using Polly;
-using Polly.CircuitBreaker;
-using Polly.Contrib.Simmy;
-using PollyResilience.Service;
-using Polly.Contrib.Simmy.Outcomes;
 using StackExchange.Redis;
-using System.Net.Sockets;
+using PollyResilience.Service;
 
 namespace RedisSubscriber
 {
@@ -40,7 +36,7 @@ namespace RedisSubscriber
 
             services.AddLogging(loggingBuilder =>
             {
-                loggingBuilder.AddNLog(_configuration["NLogConfig"]);
+                loggingBuilder.AddNLog($"{baseDir}\\nlog.config");
             });
 
             services.AddTransient<ConsoleApp>();
@@ -54,16 +50,7 @@ namespace RedisSubscriber
                     logger.Log(LogLevel.Error, $"Redis error on retry {retryCount} for {context.PolicyKey}", exception);
                 });
 
-            var fault = new SocketException(errorCode: 10013);
-            var chaosPolicy = MonkeyPolicy.InjectExceptionAsync(with =>
-                with.Fault(fault)
-                    .InjectionRate(.3)
-                    .Enabled()
-                );
-
-            var policy = retryPolicy.WrapAsync(chaosPolicy);
-
-            services.AddSingleton<IAsyncPolicy>(policy);
+            services.AddSingleton<IAsyncPolicy>(retryPolicy);
 
             return services.BuildServiceProvider();
         }

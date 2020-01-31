@@ -6,7 +6,6 @@ namespace PollyResilience.Service
 {
     public interface IPollyResilienceService
     {
-        void HelloWorld();
         Task<IEnumerable<Repository>> ProcessRepositories();
     }
 }

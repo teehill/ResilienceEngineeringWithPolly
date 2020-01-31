@@ -1,6 +1,6 @@
-﻿using PollyResilience.Service.Models;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
+using PollyResilience.Service.Models;
 
 namespace PollyResilience.Service
 {
@@ -10,11 +10,6 @@ namespace PollyResilience.Service
 
         public PollyResilienceService(IRepoService repoService) =>
             _repoService = repoService;
-
-        public void HelloWorld()
-        {
-
-        }
 
         public async Task<IEnumerable<Repository>> ProcessRepositories()
         {

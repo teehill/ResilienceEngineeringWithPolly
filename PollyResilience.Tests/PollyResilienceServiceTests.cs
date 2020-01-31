@@ -1,25 +1,28 @@
 using FakeItEasy;
-using Xunit;
 using PollyResilience.Service;
+using System.Threading.Tasks;
+using Xunit;
 
-namespace PollyResilienceConsole.Tests
+namespace PollyResilience.Tests
 {
     public class PollyResilienceServiceTests
     {
-        protected IPollyResilienceService _pollyResilienceService;
+        protected IRepoService _repoService;
+        protected PollyResilienceService _resiliencyService;
 
         public PollyResilienceServiceTests()
         {
-            _pollyResilienceService = A.Fake<IPollyResilienceService>();
+            _repoService = A.Fake<IRepoService>();
+            _resiliencyService = new PollyResilienceService(_repoService);
         }
 
 
         [Fact]
-        public void Should_Run()
+        public async Task GetRepos_MustHaveHappened()
         {
-            _pollyResilienceService.HelloWorld();
+            await _resiliencyService.ProcessRepositories();
 
-            A.CallTo(() => _pollyResilienceService.HelloWorld()).MustHaveHappened();
+            A.CallTo(() => _repoService.GetRepos()).MustHaveHappened();
         }
     }
 }

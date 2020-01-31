@@ -1,6 +1,6 @@
-using StackExchange.Redis;
 using System;
 using System.Threading.Tasks;
+using StackExchange.Redis;
 
 namespace PollyResilience.Service
 {

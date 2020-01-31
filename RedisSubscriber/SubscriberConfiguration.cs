@@ -4,7 +4,7 @@ namespace RedisSubscriber
 {
     public class SubscriberConfiguration : ISubscriberConfiguration
     {
-        IConfigurationRoot _configurationRoot;
+        readonly IConfigurationRoot _configurationRoot;
         public SubscriberConfiguration(IConfigurationRoot configurationRoot)
         {
             _configurationRoot = configurationRoot;

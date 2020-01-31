@@ -1,15 +1,9 @@
-using System;
 using System.IO;
-using System.Net.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NLog.Extensions.Logging;
-using Polly;
-using Polly.Extensions.Http;
-using Polly.Contrib.Simmy;
 using PollyResilience.Service;
-using Polly.Contrib.Simmy.Outcomes;
 
 namespace RedisSubscriber
 {
@@ -38,7 +32,7 @@ namespace RedisSubscriber
 
             services.AddLogging(loggingBuilder =>
             {
-                loggingBuilder.AddNLog(_configuration["NLogConfig"]);
+                loggingBuilder.AddNLog($"{baseDir}\\nlog.config");
             });
 
             services.AddTransient<ConsoleApp>();

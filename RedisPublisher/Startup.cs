@@ -8,11 +8,12 @@ using Microsoft.Extensions.Logging;
 using NLog.Extensions.Logging;
 using Polly;
 using Polly.Contrib.Simmy;
-using Polly.Contrib.Simmy.Outcomes;
 using Polly.Contrib.Simmy.Latency;
+using Polly.Contrib.Simmy.Outcomes;
 using Polly.Extensions.Http;
-using PollyResilience.Service;
+using Polly.Wrap;
 using StackExchange.Redis;
+using PollyResilience.Service;
 
 namespace RedisPublisher
 {
@@ -34,6 +35,9 @@ namespace RedisPublisher
         {
             services.AddSingleton(_configuration);
 
+            services.AddSingleton(_configuration.GetSection("ResiliencyConfiguration").Get<ResiliencyConfiguration>());
+            services.AddSingleton(_configuration.GetSection("GitHubConfiguration").Get<GitHubConfiguration>());
+
             services.AddSingleton<IPublisherConfiguration, PublisherConfiguration>();
 
             services.AddSingleton<IRedisClient, RedisClient>();
@@ -42,56 +46,79 @@ namespace RedisPublisher
 
             services.AddLogging(loggingBuilder =>
             {
-                loggingBuilder.AddNLog(_configuration["NLogConfig"]);
+                loggingBuilder.AddNLog($"{baseDir}\\nlog.config");
             });
 
             services.AddTransient<ConsoleApp>();
 
             var serviceProvider = services.BuildServiceProvider();
-            var logger = serviceProvider.GetService<ILogger<ConsoleApp>>();
 
-            var resiliencyConfiguration = _configuration.GetSection("ResiliencyConfiguration").Get<ResiliencyConfiguration>();
+            var pubConfig = serviceProvider.GetService<IPublisherConfiguration>();
+            var logger = serviceProvider.GetService<ILogger<ConsoleApp>>();
 
             var retryPolicy = Policy.Handle<RedisConnectionException>()
                 .Or<SocketException>()
                 .WaitAndRetryAsync(
-                    resiliencyConfiguration.RetryCount, 
-                    retryAttempt => TimeSpan.FromMilliseconds(resiliencyConfiguration.RetryDelayMilliseconds),
-                    (exception, timeSpan, retryCount, context) =>
-                {
-                    logger.Log(LogLevel.Information, $"Publisher error ({exception.GetType().ToString()}) on retry {retryCount} for {timeSpan.ToString()}", exception);
-                });
+                    retryCount: pubConfig.ResiliencyConfiguration.RetryCount,
+                    sleepDurationProvider: retryAttempt => TimeSpan.FromMilliseconds(pubConfig.ResiliencyConfiguration.RetryDelayMilliseconds),
+                    onRetry: (exception, timeSpan, retryCount, context) =>
+                    {
+                        logger.Log(LogLevel.Information, $"Publisher error ({exception.GetType().ToString()}) on retry {retryCount} for {timeSpan.ToString()}", exception);
+                    }
+                );
 
             var fault = new SocketException(errorCode: 10013);
 
-            var chaosPolicy = MonkeyPolicy.InjectExceptionAsync(with => 
+            var chaosPolicy = MonkeyPolicy.InjectExceptionAsync(with =>
                 with.Fault(fault)
-                    .InjectionRate(resiliencyConfiguration.FaultRate)
+                    .InjectionRate(pubConfig.ResiliencyConfiguration.FaultRate)
                     .Enabled()
                 );
 
             var chaosLatencyPolicy = MonkeyPolicy.InjectLatencyAsync(with =>
-                with.Latency(TimeSpan.FromMilliseconds(resiliencyConfiguration.LatencyMilliseconds))
-                    .InjectionRate(resiliencyConfiguration.LatencyInjectionRate)
+                with.Latency(TimeSpan.FromMilliseconds(pubConfig.ResiliencyConfiguration.LatencyMilliseconds))
+                    .InjectionRate(pubConfig.ResiliencyConfiguration.LatencyInjectionRate)
                     .Enabled()
                 );
 
-            var policy = retryPolicy.WrapAsync(chaosPolicy).WrapAsync(chaosLatencyPolicy);
+            var redisPolicy = retryPolicy.WrapAsync(chaosPolicy).WrapAsync(chaosLatencyPolicy);
 
-            services.AddSingleton<IAsyncPolicy>(policy);
+            services.AddSingleton<IAsyncPolicy>(redisPolicy);
+
+            var githubPolicy = SetupGithubPolicy(logger, pubConfig);
+
+            services.AddHttpClient<IRepoService, GitRepoService>(client =>
+            {
+                client.BaseAddress = new Uri(pubConfig.GitHubConfiguration.BaseAPIPath);
+                client.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json");
+                client.DefaultRequestHeaders.Add("User-Agent", "HttpClientFactory-Sample");
+            }).AddPolicyHandler(githubPolicy);
 
             return services.BuildServiceProvider();
         }
-    }
 
-    public class ResiliencyConfiguration
-    {
-        public int RetryCount { get; set; }
-        public int RetryDelayMilliseconds {get; set;}
-        public double FaultRate {get; set;}
+        private AsyncPolicyWrap<HttpResponseMessage> SetupGithubPolicy(ILogger<ConsoleApp> logger, IPublisherConfiguration pubConfig)
+        {
+            var retryPolicy = HttpPolicyExtensions
+                .HandleTransientHttpError()
+                .Or<SocketException>()
+                .WaitAndRetryAsync(retryCount: pubConfig.GitHubConfiguration.RetryCount,
+                    sleepDurationProvider: retryAttempt => TimeSpan.FromMilliseconds(pubConfig.GitHubConfiguration.RetryDelayMilliseconds),
+                    onRetry: (exception, timeSpan, retryCount, context) =>
+                    {
+                        logger.Log(LogLevel.Error, $"Git repo http error on retry {retryCount} for {context.PolicyKey}", exception);
+                    }
+                );
 
-        public int LatencyMilliseconds { get; set; }
+            var circuitBreaker = HttpPolicyExtensions.HandleTransientHttpError()
+                .CircuitBreakerAsync(handledEventsAllowedBeforeBreaking: 1,
+                    durationOfBreak: TimeSpan.FromSeconds(120),
+                    onHalfOpen: () => { logger.Log(LogLevel.Information, "Git repo http client breaker: half open"); },
+                    onBreak: (ex, ts) => { logger.Log(LogLevel.Information, $"Git repo http client circuit breaker: open for {ts.TotalSeconds} seconds"); },
+                    onReset: () => { logger.Log(LogLevel.Information, $"Git repo http client circuit breaker: closed"); }
+                );
 
-        public double LatencyInjectionRate { get; set; }
+            return retryPolicy.WrapAsync(circuitBreaker);
+        }
     }
 }

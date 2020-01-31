@@ -1,13 +1,10 @@
-﻿using System;
-using System.Linq;
-using System.Net.Sockets;
+﻿using System.Net.Sockets;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Polly;
-using Polly.CircuitBreaker;
-using Polly.Wrap;
 using Polly.Contrib.Simmy;
 using Polly.Contrib.Simmy.Behavior;
+using Polly.Wrap;
 using StackExchange.Redis;
 using PollyResilience.Service;
 
@@ -15,63 +12,64 @@ namespace RedisPublisher
 {
     public class ConsoleApp
     {
-        protected readonly ILogger<ConsoleApp> _logger;
-        protected readonly IPublisherConfiguration _config;
         protected readonly IRedisClient _redisClient;
+        protected readonly IPublisherConfiguration _configuration;
+        protected readonly ILogger<ConsoleApp> _logger;
 
-        public ConsoleApp(IPublisherConfiguration configuration,
-            ILogger<ConsoleApp> logger,
-            IRedisClient redisClient)
+        public ConsoleApp(IRedisClient redisClient,
+            IPublisherConfiguration configuration,
+            ILogger<ConsoleApp> logger)
         {
-            _logger = logger;
-            _config = configuration;
             _redisClient = redisClient;
+            _configuration = configuration;
+            _logger = logger;
         }
 
         public async Task Run()
+        {
+            var policy = SetupPolicy();
+
+            while (true)
+            {
+                foreach (var message in messages)
+                {
+                    await policy.ExecuteAsync(async () =>
+                    {
+                        await _redisClient.PublishAsync("messages", message);
+                        return string.Empty;
+                    });
+
+                    await Task.Delay(600);
+                }
+            }
+        }
+
+        private AsyncPolicyWrap<string> SetupPolicy()
         {
             var redisFallbackPolicyString = Policy<string>.Handle<RedisConnectionException>()
                 .Or<SocketException>()
                 .FallbackAsync(
                     fallbackValue: null,
-                    onFallbackAsync: async b => {
+                    onFallbackAsync: async b =>
+                    {
                         await Task.FromResult(true);
                         _logger.Log(LogLevel.Error, $"Fallback caught a '{b.Exception.GetType().ToString()}': '{b.Exception.Message}'");
-                        return; 
+                        return;
                     });
 
             var chaosPolicy = MonkeyPolicy.InjectBehaviourAsync<string>(with =>
-                with.Behaviour(InjectMonkey)
+                with.Behaviour(async () =>
+                {
+                    await _redisClient.PublishAsync("messages", monkeyMessage);
+                    await Task.Delay(2000);
+                    _logger.Log(LogLevel.Information, $"Injected monkey ook ook");
+                    return;
+                })
                     .InjectionRate(0.1)
                     .Enabled()
             );
 
-            var policy = redisFallbackPolicyString.WrapAsync(chaosPolicy);
-
-            var i = 0;
-
-            while (true)
-            {
-                await policy.ExecuteAsync(async () => {
-                    await _redisClient.PublishAsync("messages", messages[i]);
-                    return string.Empty;
-                });
-
-                await Task.Delay(600);
-
-                if (i == messages.Length - 1)
-                    i = 0;
-                else
-                    i++;
-            }
-        }
-
-        public async Task InjectMonkey()
-        {
-            await _redisClient.PublishAsync("messages", monkeyMessage);
-            await Task.Delay(2000);
-            _logger.Log(LogLevel.Information, $"Injected monkey ook ook");
-            return;
+            return redisFallbackPolicyString.WrapAsync(chaosPolicy);
         }
 
         protected string[] messages => new string[] {
@@ -156,6 +154,7 @@ $$/        $$$$$$/  $$$$$$$$/ $$$$$$$$/ $$/     ",
 };
 
         protected readonly string monkeyMessage = @"
+                                               
             .-`-.            .-`-.             
           _/_-.-_\_        _/.-.-.\_           
          / __} {__ \      /|( o o )|\          
