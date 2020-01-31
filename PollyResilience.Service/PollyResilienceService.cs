@@ -15,5 +15,10 @@ namespace PollyResilience.Service
         {
             return await _repoService.GetRepos();
         }
+
+        public async Task<RepositoryReadme> GetRepoReadme(Repository repo)
+        {
+            return await _repoService.GetRepoReadme(repo);
+        }
     }
 }

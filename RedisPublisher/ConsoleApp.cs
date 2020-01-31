@@ -61,11 +61,11 @@ namespace RedisPublisher
                 with.Behaviour(async () =>
                 {
                     await _redisClient.PublishAsync("messages", monkeyMessage);
-                    await Task.Delay(2000);
+                    await Task.Delay(_configuration.ResiliencyConfiguration.MonkeyDelay);
                     _logger.Log(LogLevel.Information, $"Injected monkey ook ook");
                     return;
                 })
-                    .InjectionRate(0.1)
+                    .InjectionRate(_configuration.ResiliencyConfiguration.MonkeyInjectionRate)
                     .Enabled()
             );
 

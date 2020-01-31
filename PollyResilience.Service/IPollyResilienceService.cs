@@ -7,5 +7,6 @@ namespace PollyResilience.Service
     public interface IPollyResilienceService
     {
         Task<IEnumerable<Repository>> ProcessRepositories();
+        Task<RepositoryReadme> GetRepoReadme(Repository repo);
     }
 }
