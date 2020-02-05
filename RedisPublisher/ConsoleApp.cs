@@ -52,7 +52,7 @@ namespace RedisPublisher
                     fallbackValue: null,
                     onFallbackAsync: async b =>
                     {
-                        await Task.FromResult(true);
+                        await Task.CompletedTask;
                         _logger.Log(LogLevel.Error, $"Fallback caught a '{b.Exception.GetType().ToString()}': '{b.Exception.Message}'");
                         return;
                     });
