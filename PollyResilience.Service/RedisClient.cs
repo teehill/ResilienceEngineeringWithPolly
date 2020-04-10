@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Net;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -14,6 +16,7 @@ namespace PollyResilience.Service
         protected readonly string _connectionString;
         protected Lazy<ConnectionMultiplexer> _multiplexer;
         protected IDatabase _database;
+        protected IServer _server;
         protected ISubscriber _subscriber;
         protected ILogger<RedisClient> _logger;
         protected readonly IAsyncPolicy _policy;
@@ -30,10 +33,31 @@ namespace PollyResilience.Service
             _connectionString = _configuration["RedisConnectionString"];
 
             _multiplexer = CreateMultiplexer();
-
             _database = _multiplexer.Value.GetDatabase();
 
             _subscriber = _multiplexer.Value.GetSubscriber();
+        }
+
+        public async Task<List<string>> GetKeys(string query = "*")
+        {
+            return await _policy.ExecuteAsync(async () =>
+            {
+                var keys = new List<string>();
+
+                foreach (var endpoint in _multiplexer.Value.GetEndPoints())
+                {
+                    var ipEndpoint = (DnsEndPoint)endpoint;
+                    var hostAndPort = $"{ipEndpoint.Host}:{ipEndpoint.Port}";
+                    var server = _multiplexer.Value.GetServer(hostAndPort);
+                    //var server = _multiplexer.Value.GetServer(endpoint.ToString().Substring(12));
+                    foreach (var key in  server.Keys(pattern: query))
+                    {
+                        keys.Add(key);
+                    }
+                }
+
+                return await Task.FromResult(keys);
+            });
         }
 
         public async Task<bool> StoreAsync(string key, string value, TimeSpan expiresAt)

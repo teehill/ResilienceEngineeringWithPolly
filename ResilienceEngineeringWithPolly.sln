@@ -13,6 +13,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RedisPublisher", "RedisPubl
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GitHubClient", "GitHubClient\GitHubClient.csproj", "{A2C79E82-919C-4B07-BDB8-4AADB269C90C}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RedisREPL", "RedisREPL\RedisREPL.csproj", "{E051ABB1-51DF-4B04-A95D-328B1CB60677}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -83,6 +85,18 @@ Global
 		{A2C79E82-919C-4B07-BDB8-4AADB269C90C}.Release|x64.Build.0 = Release|Any CPU
 		{A2C79E82-919C-4B07-BDB8-4AADB269C90C}.Release|x86.ActiveCfg = Release|Any CPU
 		{A2C79E82-919C-4B07-BDB8-4AADB269C90C}.Release|x86.Build.0 = Release|Any CPU
+		{E051ABB1-51DF-4B04-A95D-328B1CB60677}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E051ABB1-51DF-4B04-A95D-328B1CB60677}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E051ABB1-51DF-4B04-A95D-328B1CB60677}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{E051ABB1-51DF-4B04-A95D-328B1CB60677}.Debug|x64.Build.0 = Debug|Any CPU
+		{E051ABB1-51DF-4B04-A95D-328B1CB60677}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{E051ABB1-51DF-4B04-A95D-328B1CB60677}.Debug|x86.Build.0 = Debug|Any CPU
+		{E051ABB1-51DF-4B04-A95D-328B1CB60677}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E051ABB1-51DF-4B04-A95D-328B1CB60677}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E051ABB1-51DF-4B04-A95D-328B1CB60677}.Release|x64.ActiveCfg = Release|Any CPU
+		{E051ABB1-51DF-4B04-A95D-328B1CB60677}.Release|x64.Build.0 = Release|Any CPU
+		{E051ABB1-51DF-4B04-A95D-328B1CB60677}.Release|x86.ActiveCfg = Release|Any CPU
+		{E051ABB1-51DF-4B04-A95D-328B1CB60677}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
