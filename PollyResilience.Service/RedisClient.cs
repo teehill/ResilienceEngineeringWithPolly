@@ -25,12 +25,13 @@ namespace PollyResilience.Service
         public RedisClient(
             ILogger<RedisClient> logger,
             IConfigurationRoot configuration,
-            IAsyncPolicy policy)
+            IAsyncPolicy policy,
+            string configKey = "RedisConnectionString")
         {
             _logger = logger;
             _configuration = configuration;
             _policy = policy;
-            _connectionString = _configuration["RedisConnectionString"];
+            _connectionString = _configuration[configKey];
 
             _multiplexer = CreateMultiplexer();
             _database = _multiplexer.Value.GetDatabase();
@@ -63,7 +64,7 @@ namespace PollyResilience.Service
         public async Task<bool> StoreAsync(string key, string value, TimeSpan expiresAt)
         {
             return await _policy.ExecuteAsync(async () =>
-                await _database.StringSetAsync(key, value)
+                await _database.StringSetAsync(key, value, flags: CommandFlags.DemandMaster)
             );
         }
 
