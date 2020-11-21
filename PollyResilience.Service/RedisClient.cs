@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -47,13 +48,16 @@ namespace PollyResilience.Service
 
                 foreach (var endpoint in _multiplexer.Value.GetEndPoints())
                 {
-                    var ipEndpoint = (DnsEndPoint)endpoint;
-                    var hostAndPort = $"{ipEndpoint.Host}:{ipEndpoint.Port}";
+                    var ipEndpoint = (IPEndPoint)endpoint;
+                    var hostAndPort = $"{ipEndpoint.Address}:{ipEndpoint.Port}";
                     var server = _multiplexer.Value.GetServer(hostAndPort);
-                    //var server = _multiplexer.Value.GetServer(endpoint.ToString().Substring(12));
-                    foreach (var key in  server.Keys(pattern: query))
+
+                    if (server.IsConnected)
                     {
-                        keys.Add(key);
+                        foreach (var key in server.Keys(pattern: query, flags: CommandFlags.DemandReplica))
+                        {
+                            keys.Add(key);
+                        }
                     }
                 }
 
@@ -71,7 +75,7 @@ namespace PollyResilience.Service
         public async Task<string> GetAsync(string key)
         {
             return await _policy.ExecuteAsync(async () =>
-                await _database.StringGetAsync(key)
+                await _database.StringGetAsync(key, CommandFlags.DemandReplica)
             );
         }
 
@@ -108,6 +112,96 @@ namespace PollyResilience.Service
             options.ReconnectRetryPolicy = new ExponentialRetry(5000);
 
             return new Lazy<ConnectionMultiplexer>(() => ConnectionMultiplexer.Connect(options));
+        }
+
+        //reconnecting variables
+        protected object _reconnectLock = new object();
+        protected long _lastReconnectTicks = DateTimeOffset.MinValue.UtcTicks;
+        protected DateTimeOffset _firstErrorAfterReconnect = DateTimeOffset.MinValue;
+        protected DateTimeOffset _previousError = DateTimeOffset.MinValue;
+        // In general, let StackExchange.Redis handle most reconnects, 
+        // so limit the frequency of how often this will actually reconnect.
+        protected static TimeSpan s_reconnectMinFrequency = TimeSpan.FromSeconds(60);
+        // if errors continue for longer than the below threshold, then the 
+        // multiplexer seems to not be reconnecting, so re-create the multiplexer
+        protected TimeSpan _reconnectErrorThreshold = TimeSpan.FromSeconds(30);
+
+        /// <summary>
+        /// Force a new ConnectionMultiplexer to be created.  
+        /// NOTES: 
+        ///     1. Users of the ConnectionMultiplexer MUST handle ObjectDisposedExceptions, which can now happen as a result of calling ForceReconnect()
+        ///     2. Don't call ForceReconnect for Timeouts, just for RedisConnectionExceptions or SocketExceptions
+        ///     3. Call this method every time you see a connection exception, the code will wait to reconnect:
+        ///         a. for at least the "ReconnectErrorThreshold" time of repeated errors before actually reconnecting
+        ///         b. not reconnect more frequently than configured in "ReconnectMinFrequency"
+        /// </summary>    
+        public void ForceReconnect()
+        {
+            var utcNow = DateTimeOffset.UtcNow;
+            var previousTicks = Interlocked.Read(ref _lastReconnectTicks);
+            var previousReconnect = new DateTimeOffset(previousTicks, TimeSpan.Zero);
+            var elapsedSinceLastReconnect = utcNow - previousReconnect;
+
+            if (elapsedSinceLastReconnect > s_reconnectMinFrequency)
+            {
+                lock (_reconnectLock)
+                {
+                    utcNow = DateTimeOffset.UtcNow;
+                    elapsedSinceLastReconnect = utcNow - previousReconnect;
+
+                    if (_firstErrorAfterReconnect == DateTimeOffset.MinValue)
+                    {
+                        _firstErrorAfterReconnect = utcNow;
+                        _previousError = utcNow;
+                        return;
+                    }
+
+                    if (elapsedSinceLastReconnect < s_reconnectMinFrequency)
+                        return; // Some other thread made it through the check and the lock, so nothing to do.
+
+                    var elapsedSinceFirstError = utcNow - _firstErrorAfterReconnect;
+                    var elapsedSinceMostRecentError = utcNow - _previousError;
+
+                    var shouldReconnect =
+                        elapsedSinceFirstError >= _reconnectErrorThreshold   // make sure we gave the multiplexer enough time to reconnect on its own if it can
+                        && elapsedSinceMostRecentError <= _reconnectErrorThreshold; //make sure we aren't working on stale data (e.g. if there was a gap in errors, don't reconnect yet).
+
+                    _previousError = utcNow;
+
+                    if (shouldReconnect)
+                    {
+                        _logger?.Log(LogLevel.Information, $"Redis force reconnect at {utcNow.ToString()}, firstError at {_firstErrorAfterReconnect.ToString()}, previousError at {_previousError.ToString()}, lastConnect at {_lastReconnectTicks.ToString()}");
+
+                        _firstErrorAfterReconnect = DateTimeOffset.MinValue;
+                        _previousError = DateTimeOffset.MinValue;
+
+                        var oldMultiplexer = _multiplexer;
+                        CloseMultiplexer(oldMultiplexer);
+                        _multiplexer = CreateMultiplexer();
+                        Interlocked.Exchange(ref _lastReconnectTicks, utcNow.UtcTicks);
+                    }
+                    else
+                    {
+                        _logger?.Log(LogLevel.Debug, string.Format("Redis force reconnect delay due to current min frequency: {0}s, lastConnect at {1:hh\\:mm\\:ss}",
+                            s_reconnectMinFrequency.TotalSeconds, previousReconnect));
+                    }
+                }
+            }
+        }
+
+        protected void CloseMultiplexer(Lazy<ConnectionMultiplexer> oldMultiplexer)
+        {
+            if (oldMultiplexer?.Value != null)
+            {
+                try
+                {
+                    oldMultiplexer.Value.Close();
+                }
+                catch (Exception exception)
+                {
+                    _logger?.Log(LogLevel.Error, $"Redis error encountered while closing multiplexer", exception);
+                }
+            }
         }
     }
 }

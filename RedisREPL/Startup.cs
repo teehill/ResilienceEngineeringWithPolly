@@ -1,19 +1,13 @@
 using System;
 using System.IO;
-using System.Net.Http;
 using System.Net.Sockets;
-using Microsoft.Extensions.Configuration;
+using System.Threading;using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NLog.Extensions.Logging;
 using Polly;
-using Polly.Contrib.Simmy;
-using Polly.Contrib.Simmy.Latency;
-using Polly.Contrib.Simmy.Outcomes;
-using Polly.Extensions.Http;
-using Polly.Wrap;
-using StackExchange.Redis;
 using PollyResilience.Service;
+using StackExchange.Redis;
 
 namespace RedisREPL
 {
