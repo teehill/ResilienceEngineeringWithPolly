@@ -31,7 +31,7 @@ namespace RedisREPL
         {
             services.AddSingleton(_configuration);
 
-            services.AddSingleton<IRedisClient, RedisClient>();
+            services.AddSingleton<IRedisClient, RedisSplitClient>();
 
             services.AddTransient<IPollyResilienceService, PollyResilienceService>();
 

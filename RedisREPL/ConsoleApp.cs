@@ -34,7 +34,7 @@ namespace RedisREPL
                     }
                 );
 
-            _redisClientReplica = new RedisClient(null, configuration, retryPolicy, "RedisConnectionStringReplica");
+            _redisClientReplica = new RedisClient(null, configuration, retryPolicy, "RedisReadConnectionString");
             _logger = logger;
         }
 
