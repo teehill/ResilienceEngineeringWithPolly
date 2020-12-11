@@ -1,14 +1,14 @@
 
-using System;
-using System.Collections.Generic;
-using System.Net;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Wrap;
 using StackExchange.Redis;
+using System;
+using System.Collections.Generic;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
 
 namespace PollyResilience.Service
 {
@@ -26,18 +26,46 @@ namespace PollyResilience.Service
         protected readonly IAsyncPolicy _policy;
         protected readonly PolicyWrap<string> _retryCircuitStringFallback;
 
+        protected readonly string _fireForgetKey = "FireForgetMode";
+        protected readonly string _readModeKey = "ReadMode";
+        protected readonly string _writeModeKey = "WriteMode";
+        protected readonly string _readConfigKey = "RedisReadConnectionString";
+        protected readonly string _writeConfigKey = "RedisWriteConnectionString";
+
+        protected CommandFlags _readFlags;
+        protected CommandFlags _writeFlags;
+
+        private readonly System.IO.StringWriter logwriter = new System.IO.StringWriter();
+
         public RedisSplitClient(
             ILogger<RedisClient> logger,
             IConfigurationRoot configuration,
-            IAsyncPolicy policy,
-            string writeConfigKey = "RedisWriteConnectionString",
-            string readConfigKey = "RedisReadConnectionString")
+            IAsyncPolicy policy)
         {
             _logger = logger;
             _configuration = configuration;
             _policy = policy;
-            _writeConnectionString = _configuration[writeConfigKey];
-            _readConnectionString = _configuration[readConfigKey];
+            _writeConnectionString = _configuration[_writeConfigKey];
+            _readConnectionString = _configuration[_readConfigKey];
+
+
+            bool fireAndForget = true;
+            bool.TryParse(_configuration[_fireForgetKey], out fireAndForget);
+
+            var readMode = _configuration[_readModeKey];
+            var writeMode = _configuration[_writeModeKey];
+
+            if (!string.IsNullOrEmpty(readMode))
+            {
+                _readFlags = (CommandFlags)Enum.Parse(typeof(CommandFlags), readMode, true);
+            }
+
+            if (!string.IsNullOrEmpty(writeMode))
+            {
+                var writeFlag = (CommandFlags)Enum.Parse(typeof(CommandFlags), writeMode, true);
+
+                _writeFlags = (fireAndForget) ? writeFlag | CommandFlags.FireAndForget : writeFlag;
+            }
 
             _writeMultiplexer = CreateMultiplexer(_writeConnectionString);
             _readMultiplexer = CreateMultiplexer(_readConnectionString);
@@ -46,6 +74,9 @@ namespace PollyResilience.Service
             _readDatabase = _readMultiplexer.Value.GetDatabase();
 
             _subscriber = _writeMultiplexer.Value.GetSubscriber();
+            var connectionLogs = logwriter.ToString();
+            _logger.LogInformation(connectionLogs);
+            logwriter.Flush();
         }
 
         public async Task<List<string>> GetKeys(string query = "*")
@@ -54,19 +85,26 @@ namespace PollyResilience.Service
             {
                 var keys = new List<string>();
 
-                foreach (var endpoint in _readMultiplexer.Value.GetEndPoints())
+                //can't issue SCAN against replica (so using write multiplexer)
+                foreach (var endpoint in _writeMultiplexer.Value.GetEndPoints())
                 {
                     var hostAndPort = endpoint.ToString().Replace($"{endpoint.AddressFamily}/", string.Empty);
-                    var server = _readMultiplexer.Value.GetServer(hostAndPort);
+
+                    var server = _writeMultiplexer.Value.GetServer(hostAndPort);
 
                     if (server.IsConnected)
                     {
-                        foreach (var key in server.Keys(pattern: query, flags: CommandFlags.DemandReplica))
+                        _logger.LogInformation($"Querying: {hostAndPort}");
+
+                        foreach (var key in server.Keys(pattern: query, flags: _readFlags))
                         {
                             keys.Add(key);
                         }
                     }
                 }
+
+                _logger.LogInformation(logwriter.ToString());
+                logwriter.Flush();
 
                 return await Task.FromResult(keys);
             });
@@ -74,22 +112,28 @@ namespace PollyResilience.Service
 
         public async Task<bool> StoreAsync(string key, string value, TimeSpan expiresAt)
         {
+            _logger.LogInformation($"Store {_writeMultiplexer.Value.GetStatus()}");
+
             return await _policy.ExecuteAsync(async () =>
-                await _writeDatabase.StringSetAsync(key, value, flags: CommandFlags.DemandMaster)
+                await _writeDatabase.StringSetAsync(key, value, flags: _writeFlags)
             );
         }
 
         public async Task<string> GetAsync(string key)
         {
+            _logger.LogInformation($"Get {_readMultiplexer.Value.GetStatus()}");
+
             return await _policy.ExecuteAsync(async () =>
-                await _readDatabase.StringGetAsync(key, CommandFlags.DemandReplica)
+                await _readDatabase.StringGetAsync(key, _readFlags)
             );
         }
 
         public async Task<bool> RemoveAsync(string key)
         {
+            _logger.LogInformation($"Remove {_writeMultiplexer.Value.GetStatus()}");
+
             return await _policy.ExecuteAsync(async () =>
-                await _writeDatabase.KeyDeleteAsync(key)
+                await _writeDatabase.KeyDeleteAsync(key, flags: _writeFlags)
             );
         }
 
@@ -117,8 +161,15 @@ namespace PollyResilience.Service
 
             options.AbortOnConnectFail = false;
             options.ReconnectRetryPolicy = new ExponentialRetry(5000);
+            options.CertificateValidation += CheckServerCertificate;
 
-            return new Lazy<ConnectionMultiplexer>(() => ConnectionMultiplexer.Connect(options));
+            return new Lazy<ConnectionMultiplexer>(() => ConnectionMultiplexer.Connect(options, logwriter));
+        }
+
+        private static bool CheckServerCertificate(object sender, X509Certificate certificate,
+            X509Chain chain, SslPolicyErrors sslPolicyErrors)
+        {
+            return true;
         }
     }
 }

@@ -19,6 +19,7 @@ namespace RedisREPL
 
         public ConsoleApp(IRedisClient redisClient,
             IConfigurationRoot configuration,
+            IServiceProvider serviceProvider,
             ILogger<ConsoleApp> logger)
         {
             _redisClient = redisClient;
@@ -34,8 +35,14 @@ namespace RedisREPL
                     }
                 );
 
-            _redisClientReplica = new RedisClient(null, configuration, retryPolicy, "RedisReadConnectionString");
+            var redisLogger = (ILogger<RedisClient>)serviceProvider.GetService(typeof(ILogger<RedisClient>));
+
+            _redisClientReplica = new RedisClient(redisLogger, configuration, retryPolicy, "RedisReadConnectionString");
             _logger = logger;
+
+            //initial connection viewing
+            Console.WriteLine("---Press any key---");
+            Console.ReadKey();
         }
 
         public async Task Run()
@@ -48,6 +55,7 @@ namespace RedisREPL
                 Console.WriteLine("2) Get all keys / values");
                 Console.WriteLine("3) Add new key / value");
                 Console.WriteLine("4) Test Replication");
+                Console.WriteLine("5) Get Extended Tests");
                 Console.WriteLine("(Anything else) Exit");
                 Console.Write("\r\nSelect an option >");
 
@@ -64,6 +72,9 @@ namespace RedisREPL
                         break;
                     case '4':
                         await TestReplication();
+                        break;
+                    case '5':
+                        await GetExtendedTest();
                         break;
                     default:
                         return;
@@ -206,6 +217,9 @@ namespace RedisREPL
             var value = Console.ReadLine();
 
             await _redisClient.StoreAsync(keyName, value, TimeSpan.FromDays(1));
+
+            Console.WriteLine("---Press any key---");
+            Console.ReadKey();
         }
 
         public async Task TestReplication()
@@ -250,6 +264,40 @@ namespace RedisREPL
                         Console.WriteLine($"iteration {i}: not yet");
                     }
                 }
+            }
+
+            Console.WriteLine("---Press any key---");
+            Console.ReadKey();
+        }
+
+        public async Task GetExtendedTest()
+        {
+            Console.WriteLine();
+
+            Console.Write("Iterations >");
+
+            var iterations = int.Parse(Console.ReadLine());
+
+            Console.Write("Wait period (ms) >");
+
+            int delay = int.Parse(Console.ReadLine());
+
+            Console.Write("Key to query >");
+
+            var key = Console.ReadLine();
+
+            for (int i = 0; i < iterations; i++)
+            {
+                var timer = new Stopwatch();
+                timer.Start();
+
+                var result = await _redisClient.GetAsync(key);
+
+                timer.Stop();
+
+                Console.WriteLine($"{key}:{result} iteration {i}: get completed in {timer.ElapsedMilliseconds}ms");
+
+                System.Threading.Thread.Sleep(delay);
             }
 
             Console.WriteLine("---Press any key---");

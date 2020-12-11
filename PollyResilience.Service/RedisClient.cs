@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -54,7 +56,7 @@ namespace PollyResilience.Service
 
                     if (server.IsConnected)
                     {
-                        foreach (var key in server.Keys(pattern: query, flags: CommandFlags.DemandReplica))
+                        foreach (var key in server.Keys(pattern: query, flags: CommandFlags.PreferReplica))
                         {
                             keys.Add(key);
                         }
@@ -75,7 +77,7 @@ namespace PollyResilience.Service
         public async Task<string> GetAsync(string key)
         {
             return await _policy.ExecuteAsync(async () =>
-                await _database.StringGetAsync(key, CommandFlags.DemandReplica)
+                await _database.StringGetAsync(key, CommandFlags.PreferReplica)
             );
         }
 
@@ -110,8 +112,15 @@ namespace PollyResilience.Service
 
             options.AbortOnConnectFail = false;
             options.ReconnectRetryPolicy = new ExponentialRetry(5000);
+            options.CertificateValidation += CheckServerCertificate;
 
             return new Lazy<ConnectionMultiplexer>(() => ConnectionMultiplexer.Connect(options));
+        }
+
+        private static bool CheckServerCertificate(object sender, X509Certificate certificate,
+            X509Chain chain, SslPolicyErrors sslPolicyErrors)
+        {
+            return true;
         }
 
         //reconnecting variables
