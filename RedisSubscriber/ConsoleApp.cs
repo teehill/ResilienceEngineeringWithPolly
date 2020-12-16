@@ -22,16 +22,16 @@ namespace RedisSubscriber
 
         public async Task Run()
         {
-            while (true)
+            await _redisClient.SubscribeAsync("messages", async (message, value) =>
             {
-                var query = Console.ReadLine();
+                Console.Clear();
 
-                var keys = await _redisClient.GetKeys(query);
+                Console.Write(value.ToString());
 
-                foreach (var key in keys) {
-                    Console.WriteLine(key);
-                }
-            }
+                await Task.Delay(100);
+            });
+
+            Console.ReadLine();
         }
 
         public static int Add(int a, int b)
