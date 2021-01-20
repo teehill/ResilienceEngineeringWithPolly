@@ -226,21 +226,27 @@ namespace RedisREPL
         {
             Console.WriteLine();
 
-            Console.Write("Iterations >");
+            Console.Write("Iterations (0 forever) >");
 
             var iterations = int.Parse(Console.ReadLine());
+
+            Console.Write("Delay between tests (ms) >");
+
+            int delay = int.Parse(Console.ReadLine());
 
             Console.Write("Key name >");
 
             var keyName = Console.ReadLine();
 
-            Console.Write("Value >");
+            Console.Write("Store Value >");
 
             var value = Console.ReadLine();
 
-            for (int i = 0; i < iterations; i++)
+            var count = 0;
+
+            while (true)
             {
-                var iterationKey = $"{keyName}_{i}";
+                var iterationKey = $"{keyName}_{count}";
 
                 await _redisClient.StoreAsync(iterationKey, value, TimeSpan.FromDays(1));
 
@@ -255,15 +261,21 @@ namespace RedisREPL
                     {
                         timer.Stop();
 
-                        Console.WriteLine($"iteration {i}: propagated in {timer.ElapsedMilliseconds}ms");
+                        Console.WriteLine($"iteration {count}: propagation in {decimal.Divide(timer.ElapsedTicks, TimeSpan.TicksPerMillisecond)} ms {timer.ElapsedTicks} ticks");
 
                         break;
                     }
-                    else
-                    {
-                        Console.WriteLine($"iteration {i}: not yet");
-                    }
                 }
+
+                if (iterations > 0 && count >= iterations)
+                {
+                    Console.WriteLine("All done");
+                    break;
+                }
+
+                System.Threading.Thread.Sleep(delay);
+
+                count++;
             }
 
             Console.WriteLine("---Press any key---");
@@ -274,11 +286,11 @@ namespace RedisREPL
         {
             Console.WriteLine();
 
-            Console.Write("Iterations >");
+            Console.Write("Iterations (0 forever) >");
 
             var iterations = int.Parse(Console.ReadLine());
 
-            Console.Write("Wait period (ms) >");
+            Console.Write("Delay between tests (ms) >");
 
             int delay = int.Parse(Console.ReadLine());
 
@@ -286,7 +298,9 @@ namespace RedisREPL
 
             var key = Console.ReadLine();
 
-            for (int i = 0; i < iterations; i++)
+            var count = 0;
+
+            while (true)
             {
                 var timer = new Stopwatch();
                 timer.Start();
@@ -295,9 +309,19 @@ namespace RedisREPL
 
                 timer.Stop();
 
-                Console.WriteLine($"{key}:{result} iteration {i}: get completed in {timer.ElapsedMilliseconds}ms");
+                string logMessage = $"{count}|{key}:{result}: get completed in {decimal.Divide(timer.ElapsedTicks, TimeSpan.TicksPerMillisecond)} ms {timer.ElapsedTicks} ticks";
+                Console.WriteLine(logMessage);
+                _logger.LogInformation(logMessage);
+
+                if (iterations > 0 && count >= iterations)
+                {
+                    Console.WriteLine("All done");
+                    break;
+                }
 
                 System.Threading.Thread.Sleep(delay);
+
+                count++;
             }
 
             Console.WriteLine("---Press any key---");

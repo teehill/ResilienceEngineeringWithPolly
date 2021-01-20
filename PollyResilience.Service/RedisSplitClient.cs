@@ -6,6 +6,7 @@ using Polly.Wrap;
 using StackExchange.Redis;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
@@ -73,9 +74,9 @@ namespace PollyResilience.Service
             _writeDatabase = _writeMultiplexer.Value.GetDatabase();
             _readDatabase = _readMultiplexer.Value.GetDatabase();
 
-            _subscriber = _writeMultiplexer.Value.GetSubscriber();
+
             var connectionLogs = logwriter.ToString();
-            _logger.LogInformation(connectionLogs);
+            _logger.LogDebug(connectionLogs);
             logwriter.Flush();
         }
 
@@ -94,7 +95,7 @@ namespace PollyResilience.Service
 
                     if (server.IsConnected)
                     {
-                        _logger.LogInformation($"Querying: {hostAndPort}");
+                        _logger.LogDebug($"Querying: {hostAndPort}");
 
                         foreach (var key in server.Keys(pattern: query, flags: _readFlags))
                         {
@@ -103,7 +104,7 @@ namespace PollyResilience.Service
                     }
                 }
 
-                _logger.LogInformation(logwriter.ToString());
+                _logger.LogDebug(logwriter.ToString());
                 logwriter.Flush();
 
                 return await Task.FromResult(keys);
@@ -112,7 +113,7 @@ namespace PollyResilience.Service
 
         public async Task<bool> StoreAsync(string key, string value, TimeSpan expiresAt)
         {
-            _logger.LogInformation($"Store {_writeMultiplexer.Value.GetStatus()}");
+            _logger.LogDebug($"Store {_writeMultiplexer.Value.GetStatus()}");
 
             return await _policy.ExecuteAsync(async () =>
                 await _writeDatabase.StringSetAsync(key, value, flags: _writeFlags)
@@ -121,7 +122,7 @@ namespace PollyResilience.Service
 
         public async Task<string> GetAsync(string key)
         {
-            _logger.LogInformation($"Get {_readMultiplexer.Value.GetStatus()}");
+            _logger.LogDebug($"Get {_readMultiplexer.Value.GetStatus()}");
 
             return await _policy.ExecuteAsync(async () =>
                 await _readDatabase.StringGetAsync(key, _readFlags)
@@ -130,7 +131,7 @@ namespace PollyResilience.Service
 
         public async Task<bool> RemoveAsync(string key)
         {
-            _logger.LogInformation($"Remove {_writeMultiplexer.Value.GetStatus()}");
+            _logger.LogDebug($"Remove {_writeMultiplexer.Value.GetStatus()}");
 
             return await _policy.ExecuteAsync(async () =>
                 await _writeDatabase.KeyDeleteAsync(key, flags: _writeFlags)
@@ -161,6 +162,7 @@ namespace PollyResilience.Service
 
             options.AbortOnConnectFail = false;
             options.ReconnectRetryPolicy = new ExponentialRetry(5000);
+            options.AllowAdmin = true;
             options.CertificateValidation += CheckServerCertificate;
 
             return new Lazy<ConnectionMultiplexer>(() => ConnectionMultiplexer.Connect(options, logwriter));

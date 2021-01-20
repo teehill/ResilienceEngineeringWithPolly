@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
@@ -111,6 +112,7 @@ namespace PollyResilience.Service
             var options = ConfigurationOptions.Parse(_connectionString);
 
             options.AbortOnConnectFail = false;
+            options.AllowAdmin = true;
             options.ReconnectRetryPolicy = new ExponentialRetry(5000);
             options.CertificateValidation += CheckServerCertificate;
 
@@ -179,7 +181,7 @@ namespace PollyResilience.Service
 
                     if (shouldReconnect)
                     {
-                        _logger?.Log(LogLevel.Information, $"Redis force reconnect at {utcNow.ToString()}, firstError at {_firstErrorAfterReconnect.ToString()}, previousError at {_previousError.ToString()}, lastConnect at {_lastReconnectTicks.ToString()}");
+                        _logger?.Log(LogLevel.Warning, $"Redis force reconnect at {utcNow.ToString()}, firstError at {_firstErrorAfterReconnect.ToString()}, previousError at {_previousError.ToString()}, lastConnect at {_lastReconnectTicks.ToString()}");
 
                         _firstErrorAfterReconnect = DateTimeOffset.MinValue;
                         _previousError = DateTimeOffset.MinValue;
@@ -191,7 +193,7 @@ namespace PollyResilience.Service
                     }
                     else
                     {
-                        _logger?.Log(LogLevel.Debug, string.Format("Redis force reconnect delay due to current min frequency: {0}s, lastConnect at {1:hh\\:mm\\:ss}",
+                        _logger?.Log(LogLevel.Warning, string.Format("Redis force reconnect delay due to current min frequency: {0}s, lastConnect at {1:hh\\:mm\\:ss}",
                             s_reconnectMinFrequency.TotalSeconds, previousReconnect));
                     }
                 }

@@ -38,6 +38,7 @@ namespace RedisREPL
             services.AddLogging(loggingBuilder =>
             {
                 loggingBuilder.AddNLog(Path.Combine(baseDir, "nlog.config"));
+                loggingBuilder.SetMinimumLevel(LogLevel.Trace);
             });
 
             services.AddTransient<ConsoleApp>();
@@ -53,7 +54,7 @@ namespace RedisREPL
                     sleepDurationProvider: retryAttempt => TimeSpan.FromMilliseconds(200),
                     onRetry: (exception, timeSpan, retryCount, context) =>
                     {
-                        _logger.Log(LogLevel.Information, $"REPL error ({exception.GetType().ToString()}) on retry {retryCount} for {timeSpan.ToString()}", exception);
+                        _logger.Log(LogLevel.Warning, $"REPL error ({exception.GetType().ToString()}) on retry {retryCount} for {timeSpan.ToString()}", exception);
                     }
                 );
 
