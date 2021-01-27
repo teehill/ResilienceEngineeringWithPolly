@@ -261,13 +261,14 @@ namespace RedisREPL
                     {
                         timer.Stop();
 
-                        Console.WriteLine($"iteration {count}: propagation in {decimal.Divide(timer.ElapsedTicks, TimeSpan.TicksPerMillisecond)} ms {timer.ElapsedTicks} ticks");
-
+                        var logMessage = $"iteration {count}: propagation in {decimal.Divide(timer.ElapsedTicks, TimeSpan.TicksPerMillisecond)} ms {timer.ElapsedTicks} ticks";
+                        Console.WriteLine(logMessage);
+                        _logger.LogInformation(logMessage);
                         break;
                     }
                 }
 
-                if (iterations > 0 && count >= iterations)
+                if (iterations > 0 && count >= iterations - 1)
                 {
                     Console.WriteLine("All done");
                     break;
@@ -313,7 +314,7 @@ namespace RedisREPL
                 Console.WriteLine(logMessage);
                 _logger.LogInformation(logMessage);
 
-                if (iterations > 0 && count >= iterations)
+                if (iterations > 0 && count >= iterations - 1)
                 {
                     Console.WriteLine("All done");
                     break;
