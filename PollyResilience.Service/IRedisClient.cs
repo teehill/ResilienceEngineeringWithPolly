@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading.Tasks;
 using StackExchange.Redis;
 
@@ -18,5 +19,11 @@ namespace PollyResilience.Service
         Task SubscribeAsync(string channel, Action<RedisChannel, RedisValue> handler);
 
         Task PublishAsync(string channel, string message);
+
+        Task<TimeSpan> Ping(RedisServerType serverType = RedisServerType.Read);
+
+        IEnumerable<EndPoint> GetEndpoints();
+
+        Task<RedisResult> IssueCommand(EndPoint serverEndpoint, string command);
     }
 }

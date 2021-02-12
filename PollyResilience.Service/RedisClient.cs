@@ -26,6 +26,15 @@ namespace PollyResilience.Service
         protected readonly IAsyncPolicy _policy;
         protected readonly PolicyWrap<string> _retryCircuitStringFallback;
 
+        protected readonly string _fireForgetKey = "FireForgetMode";
+        protected readonly string _readModeKey = "ReadMode";
+        protected readonly string _writeModeKey = "WriteMode";
+        protected readonly string _readConfigKey = "RedisReadConnectionString";
+        protected readonly string _writeConfigKey = "RedisWriteConnectionString";
+
+        protected CommandFlags _readFlags;
+        protected CommandFlags _writeFlags;
+
         public RedisClient(
             ILogger<RedisClient> logger,
             IConfigurationRoot configuration,
@@ -36,6 +45,24 @@ namespace PollyResilience.Service
             _configuration = configuration;
             _policy = policy;
             _connectionString = _configuration[configKey];
+
+            bool fireAndForget = true;
+            bool.TryParse(_configuration[_fireForgetKey], out fireAndForget);
+
+            var readMode = _configuration[_readModeKey];
+            var writeMode = _configuration[_writeModeKey];
+
+            if (!string.IsNullOrEmpty(readMode))
+            {
+                _readFlags = (CommandFlags)Enum.Parse(typeof(CommandFlags), readMode, true);
+            }
+
+            if (!string.IsNullOrEmpty(writeMode))
+            {
+                var writeFlag = (CommandFlags)Enum.Parse(typeof(CommandFlags), writeMode, true);
+
+                _writeFlags = (fireAndForget) ? writeFlag | CommandFlags.FireAndForget : writeFlag;
+            }
 
             _multiplexer = CreateMultiplexer();
             _database = _multiplexer.Value.GetDatabase();
@@ -57,7 +84,7 @@ namespace PollyResilience.Service
 
                     if (server.IsConnected)
                     {
-                        foreach (var key in server.Keys(pattern: query, flags: CommandFlags.PreferReplica))
+                        foreach (var key in server.Keys(pattern: query, flags: _readFlags))
                         {
                             keys.Add(key);
                         }
@@ -71,21 +98,21 @@ namespace PollyResilience.Service
         public async Task<bool> StoreAsync(string key, string value, TimeSpan expiresAt)
         {
             return await _policy.ExecuteAsync(async () =>
-                await _database.StringSetAsync(key, value, flags: CommandFlags.DemandMaster)
+                await _database.StringSetAsync(key, value, flags: _writeFlags)
             );
         }
 
         public async Task<string> GetAsync(string key)
         {
             return await _policy.ExecuteAsync(async () =>
-                await _database.StringGetAsync(key, CommandFlags.PreferReplica)
+                await _database.StringGetAsync(key, flags: _readFlags)
             );
         }
 
         public async Task<bool> RemoveAsync(string key)
         {
             return await _policy.ExecuteAsync(async () =>
-                await _database.KeyDeleteAsync(key)
+                await _database.KeyDeleteAsync(key, flags: _writeFlags)
             );
         }
 
@@ -105,6 +132,23 @@ namespace PollyResilience.Service
             {
                 await _subscriber.PublishAsync(channel, message);
             });
+        }
+
+        public async Task<TimeSpan> Ping(RedisServerType serverType)
+        {
+            return await _database.PingAsync(flags: _readFlags);
+        }
+
+        public IEnumerable<EndPoint> GetEndpoints()
+        {
+            return _multiplexer.Value.GetEndPoints();
+        }
+
+        public async Task<RedisResult> IssueCommand(EndPoint serverEndpoint, string command)
+        {
+            var server = _multiplexer.Value.GetServer(serverEndpoint);
+
+            return await server.ExecuteAsync(command);
         }
 
         protected Lazy<ConnectionMultiplexer> CreateMultiplexer()

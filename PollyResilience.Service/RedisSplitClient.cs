@@ -1,18 +1,24 @@
-
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Wrap;
 using StackExchange.Redis;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Security;
-using System.Security.Cryptography.X509Certificates;
-using System.Threading.Tasks;
 
 namespace PollyResilience.Service
 {
+    public enum RedisServerType
+    {
+        Read,
+        Write
+    }
+
     public class RedisSplitClient : IRedisClient
     {
         protected readonly IConfigurationRoot _configuration;
@@ -154,6 +160,36 @@ namespace PollyResilience.Service
             {
                 await _subscriber.PublishAsync(channel, message);
             });
+        }
+
+        public async Task<TimeSpan> Ping(RedisServerType serverType = RedisServerType.Read)
+        {
+            if (serverType == RedisServerType.Read)
+                return await _readDatabase.PingAsync(flags: _readFlags);
+            else
+                return await _writeDatabase.PingAsync(flags: _readFlags);
+        }
+
+        public IEnumerable<EndPoint> GetEndpoints()
+        {
+            return _writeMultiplexer.Value.GetEndPoints().ToList().Concat(_readMultiplexer.Value.GetEndPoints());
+        }
+
+        public async Task<RedisResult> IssueCommand(EndPoint serverEndpoint, string command)
+        {
+            var readServers = _readMultiplexer.Value.GetEndPoints().ToList();
+            var writeServers = _writeMultiplexer.Value.GetEndPoints().ToList();
+
+            IServer chosenServer;
+
+            if (readServers.Contains(serverEndpoint))
+                chosenServer = _readMultiplexer.Value.GetServer(serverEndpoint);
+            else if (writeServers.Contains(serverEndpoint))
+                chosenServer = _writeMultiplexer.Value.GetServer(serverEndpoint);
+            else
+                return default;
+
+            return await chosenServer.ExecuteAsync(command);
         }
 
         protected Lazy<ConnectionMultiplexer> CreateMultiplexer(string connectionString)

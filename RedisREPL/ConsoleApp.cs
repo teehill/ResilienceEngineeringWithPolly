@@ -6,6 +6,7 @@ using StackExchange.Redis;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 
@@ -56,6 +57,7 @@ namespace RedisREPL
                 Console.WriteLine("3) Add new key / value");
                 Console.WriteLine("4) Test Replication");
                 Console.WriteLine("5) Get Extended Tests");
+                Console.WriteLine("6) Issue Command");
                 Console.WriteLine("(Anything else) Exit");
                 Console.Write("\r\nSelect an option >");
 
@@ -75,6 +77,9 @@ namespace RedisREPL
                         break;
                     case '5':
                         await GetExtendedTest();
+                        break;
+                    case '6':
+                        await IssueCommand();
                         break;
                     default:
                         return;
@@ -116,7 +121,9 @@ namespace RedisREPL
 
             timer.Stop();
 
-            var outputLine = $">>>'{key}': '{value}' (in {timer.ElapsedMilliseconds}ms)";
+            var ping = await _redisClient.Ping();
+
+            var outputLine = $">>>'{key}': '{value}' (in {timer.ElapsedMilliseconds}ms ping {decimal.Divide(ping.Ticks, TimeSpan.TicksPerMillisecond)}ms)";
 
             if (displayType == '2' || displayType == '3')
             {
@@ -261,7 +268,11 @@ namespace RedisREPL
                     {
                         timer.Stop();
 
-                        var logMessage = $"iteration {count}: propagation in {decimal.Divide(timer.ElapsedTicks, TimeSpan.TicksPerMillisecond)} ms {timer.ElapsedTicks} ticks";
+                        var readPing = await _redisClient.Ping(RedisServerType.Read);
+
+                        var writePing = await _redisClient.Ping(RedisServerType.Write);
+
+                        var logMessage = $"iteration {count}: propagation in {decimal.Divide(timer.ElapsedTicks, TimeSpan.TicksPerMillisecond)} ms {timer.ElapsedTicks} ticks (current ping r[{decimal.Divide(readPing.Ticks, TimeSpan.TicksPerMillisecond)}] w[{decimal.Divide(writePing.Ticks, TimeSpan.TicksPerMillisecond)}]) ";
                         Console.WriteLine(logMessage);
                         _logger.LogInformation(logMessage);
                         break;
@@ -310,7 +321,9 @@ namespace RedisREPL
 
                 timer.Stop();
 
-                string logMessage = $"{count}|{key}:{result}: get completed in {decimal.Divide(timer.ElapsedTicks, TimeSpan.TicksPerMillisecond)} ms {timer.ElapsedTicks} ticks";
+                var ping = await _redisClient.Ping();
+
+                string logMessage = $"{count}|{key}:{result}: get completed in {decimal.Divide(timer.ElapsedTicks, TimeSpan.TicksPerMillisecond)} ms {timer.ElapsedTicks} ticks (current ping {decimal.Divide(ping.Ticks, TimeSpan.TicksPerMillisecond)} ms {ping.Ticks} ticks)";
                 Console.WriteLine(logMessage);
                 _logger.LogInformation(logMessage);
 
@@ -324,6 +337,34 @@ namespace RedisREPL
 
                 count++;
             }
+
+            Console.WriteLine("---Press any key---");
+            Console.ReadKey();
+        }
+
+        public async Task IssueCommand()
+        {
+            Console.WriteLine();
+            Console.WriteLine("Choose server:");
+
+            var endpoints = _redisClient.GetEndpoints();
+
+            for (int i = 0; i < endpoints.Count(); i++)
+            {
+                Console.WriteLine($"{i}: {endpoints.ElementAt(i).ToString()}");
+            }
+
+            Console.Write("Server >");
+
+            var serverIndex = int.Parse(Console.ReadLine());
+
+            Console.Write("Command >");
+
+            var command = Console.ReadLine();
+
+            var output = await _redisClient.IssueCommand(endpoints.ElementAt(serverIndex), command);
+
+            Console.Write(output);
 
             Console.WriteLine("---Press any key---");
             Console.ReadKey();
