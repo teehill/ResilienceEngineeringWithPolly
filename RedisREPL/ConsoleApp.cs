@@ -424,10 +424,6 @@ namespace RedisREPL
         {
             var test = new System.Data.DataTable("test");
 
-            await _redisClient.StoreAsync("datatable_test", test, TimeSpan.FromSeconds(60));
-
-            var t_result = await _redisClient.GetAsync<System.Data.DataTable>("datatable_test");
-
             Console.WriteLine();
 
             Console.Write("Iterations (0 forever) >");
@@ -448,18 +444,32 @@ namespace RedisREPL
 
             var count = 0;
 
+            var testObjects = CreateObjects(testObjectCount);
+            byte[] bytes;
+
+            //getting object size
+            using (var stream = new MemoryStream())
+            {
+                new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter().Serialize(stream, testObjects);
+                bytes = stream.ToArray();
+            }
+
+            Console.WriteLine($"Object bytes: {bytes.Length}");
+
             while (true)
             {
-                var testObjects = CreateObjects(testObjectCount);
-
                 var binaryKey = $"{key}-binary";
-
-                var jsonKey = $"{key}-json";
 
                 var timer = new Stopwatch();
                 timer.Start();
 
                 await _redisClient.StoreAsync(binaryKey, testObjects, TimeSpan.FromSeconds(60));
+
+                timer.Stop();
+                var writeMS = timer.ElapsedMilliseconds;
+
+                timer.Reset();
+                timer.Start();
 
                 var result = await _redisClient.GetAsync<Dictionary<int, POCOTest>>(binaryKey);
 
@@ -467,21 +477,7 @@ namespace RedisREPL
 
                 var ping = await _redisClient.Ping();
 
-                string logMessage = $"{count}|{key}:{result}: binary get completed in {decimal.Divide(timer.ElapsedTicks, TimeSpan.TicksPerMillisecond)} ms {timer.ElapsedTicks} ticks (current ping {decimal.Divide(ping.Ticks, TimeSpan.TicksPerMillisecond)} ms {ping.Ticks} ticks)";
-                Console.WriteLine(logMessage);
-                _logger.LogInformation(logMessage);
-
-                timer.Start();
-
-                await _redisClient.StoreAsync(jsonKey, testObjects, TimeSpan.FromSeconds(60), binary: false);
-
-                result = await _redisClient.GetAsync<Dictionary<int, POCOTest>>(jsonKey, binary: false);
-
-                timer.Stop();
-
-                ping = await _redisClient.Ping();
-
-                logMessage = $"{count}|{key}:{result}: json get completed in {decimal.Divide(timer.ElapsedTicks, TimeSpan.TicksPerMillisecond)} ms {timer.ElapsedTicks} ticks (current ping {decimal.Divide(ping.Ticks, TimeSpan.TicksPerMillisecond)} ms {ping.Ticks} ticks)";
+                string logMessage = $"{count}|{key}:{result}: binary store completed in {writeMS}ms  binary get completed in {timer.ElapsedMilliseconds}ms (current ping {ping.TotalMilliseconds}ms {ping.Ticks} ticks)";
                 Console.WriteLine(logMessage);
                 _logger.LogInformation(logMessage);
 
