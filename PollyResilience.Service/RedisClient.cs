@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.IO;
 using System.Net;
 using System.Net.Security;
+using System.Runtime.Serialization.Formatters.Binary;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Wrap;
 using StackExchange.Redis;
+using StackExchange.Redis.Extensions.Newtonsoft;
 
 namespace PollyResilience.Service
 {
@@ -25,6 +27,11 @@ namespace PollyResilience.Service
         protected ILogger<RedisClient> _logger;
         protected readonly IAsyncPolicy _policy;
         protected readonly PolicyWrap<string> _retryCircuitStringFallback;
+
+        [ThreadStatic]
+        private static BinaryFormatter _formatter = null;
+
+        protected readonly NewtonsoftSerializer _serializer;
 
         protected readonly string _fireForgetKey = "FireForgetMode";
         protected readonly string _readModeKey = "ReadMode";
@@ -45,6 +52,9 @@ namespace PollyResilience.Service
             _configuration = configuration;
             _policy = policy;
             _connectionString = _configuration[configKey];
+
+            _formatter = new BinaryFormatter();
+            _serializer = new NewtonsoftSerializer();
 
             bool fireAndForget = true;
             bool.TryParse(_configuration[_fireForgetKey], out fireAndForget);
@@ -68,6 +78,13 @@ namespace PollyResilience.Service
             _database = _multiplexer.Value.GetDatabase();
 
             _subscriber = _multiplexer.Value.GetSubscriber();
+        }
+
+        public string GetServerName()
+        {
+            var portIndex = _multiplexer.Value.Configuration.IndexOf(':');
+
+            return _multiplexer.Value.Configuration.Substring(0, portIndex);
         }
 
         public async Task<List<string>> GetKeys(string query = "*")
@@ -95,6 +112,30 @@ namespace PollyResilience.Service
             });
         }
 
+        public async Task<bool> StoreAsync(string key, object value, TimeSpan expiresAt, bool binary = true)
+        {
+            if (binary)
+            {
+                byte[] bytes;
+
+                using (var stream = new MemoryStream())
+                {
+                    new BinaryFormatter().Serialize(stream, value);
+                    bytes = stream.ToArray();
+                }
+
+                return await _policy.ExecuteAsync(async () =>
+                    await _database.StringSetAsync(key, bytes, flags: _writeFlags)
+                );
+            } 
+            else
+            {
+                return await _policy.ExecuteAsync(async () =>
+                    await _database.StringSetAsync(key, _serializer.Serialize(value), flags: _writeFlags)
+                );
+            }
+        }
+
         public async Task<bool> StoreAsync(string key, string value, TimeSpan expiresAt)
         {
             return await _policy.ExecuteAsync(async () =>
@@ -107,6 +148,27 @@ namespace PollyResilience.Service
             return await _policy.ExecuteAsync(async () =>
                 await _database.StringGetAsync(key, flags: _readFlags)
             );
+        }
+
+        public async Task<T> GetAsync<T>(string key, bool binary = true)
+        {
+            var result = await _policy.ExecuteAsync(async () =>
+                await _database.StringGetAsync(key, flags: _readFlags)
+            );
+
+            if (binary && result.HasValue)
+            {
+                using (var stream = new MemoryStream(result))
+                {
+                    return (T)new BinaryFormatter().Deserialize(stream);
+                }
+            }
+            else if (result.HasValue)
+            {
+                return _serializer.Deserialize<T>(result);
+            }
+
+            return default(T);
         }
 
         public async Task<bool> RemoveAsync(string key)
@@ -149,6 +211,13 @@ namespace PollyResilience.Service
             var server = _multiplexer.Value.GetServer(serverEndpoint);
 
             return await server.ExecuteAsync(command);
+        }
+
+        public async Task<ClientInfo[]> GetClientList(EndPoint serverEndpoint)
+        {
+            var server = _multiplexer.Value.GetServer(serverEndpoint);
+
+            return await server.ClientListAsync();
         }
 
         protected Lazy<ConnectionMultiplexer> CreateMultiplexer()

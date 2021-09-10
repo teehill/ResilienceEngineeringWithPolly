@@ -4,6 +4,7 @@ using Polly;
 using PollyResilience.Service;
 using StackExchange.Redis;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -58,6 +59,9 @@ namespace RedisREPL
                 Console.WriteLine("4) Test Replication");
                 Console.WriteLine("5) Get Extended Tests");
                 Console.WriteLine("6) Issue Command");
+                Console.WriteLine("7) Server Names");
+                Console.WriteLine("8) POCO set/get");
+                Console.WriteLine("9) Get Client List");
                 Console.WriteLine("(Anything else) Exit");
                 Console.Write("\r\nSelect an option >");
 
@@ -80,6 +84,17 @@ namespace RedisREPL
                         break;
                     case '6':
                         await IssueCommand();
+                        break;
+                    case '7':
+                        Console.WriteLine(_redisClient.GetServerName());
+                        Console.WriteLine("---Press any key---");
+                        Console.ReadKey();
+                        break;
+                    case '8':
+                        await BinaryStreamVSJson();
+                        break;
+                    case '9':
+                        await GetClientList();
                         break;
                     default:
                         return;
@@ -117,7 +132,7 @@ namespace RedisREPL
             var timer = new Stopwatch();
             timer.Start();
                 
-            var value = await _redisClient.GetAsync(key);
+            var value = await _redisClient.GetAsync<int?>(key, true);
 
             timer.Stop();
 
@@ -233,7 +248,11 @@ namespace RedisREPL
         {
             Console.WriteLine();
 
-            Console.Write("Iterations (0 forever) >");
+            Console.Write("Threads >");
+
+            var threads = int.Parse(Console.ReadLine());
+
+            Console.Write("Iterations per thread (0 forever) >");
 
             var iterations = int.Parse(Console.ReadLine());
 
@@ -250,6 +269,8 @@ namespace RedisREPL
             var value = Console.ReadLine();
 
             var count = 0;
+
+
 
             while (true)
             {
@@ -369,5 +390,156 @@ namespace RedisREPL
             Console.WriteLine("---Press any key---");
             Console.ReadKey();
         }
+
+        public async Task GetClientList()
+        {
+            var endpoints = _redisClient.GetEndpoints();
+
+            for (int i = 0; i < endpoints.Count(); i++)
+            {
+                Console.WriteLine($"{i}: {endpoints.ElementAt(i).ToString()}");
+            }
+
+            var result = new List<ClientInfo>();
+
+            
+            foreach (var endpoint in endpoints)
+            {
+                var temp = await _redisClient.GetClientList(endpoint);               
+
+                result.AddRange(temp);
+            }
+
+            foreach (var r in result)
+            {
+                Console.WriteLine($"Client ip {r.Address} type: {r.ClientType}");
+            }
+
+
+            Console.WriteLine("---Press any key---");
+            Console.ReadKey();
+        }
+
+        public async Task BinaryStreamVSJson()
+        {
+            var test = new System.Data.DataTable("test");
+
+            await _redisClient.StoreAsync("datatable_test", test, TimeSpan.FromSeconds(60));
+
+            var t_result = await _redisClient.GetAsync<System.Data.DataTable>("datatable_test");
+
+            Console.WriteLine();
+
+            Console.Write("Iterations (0 forever) >");
+
+            var iterations = int.Parse(Console.ReadLine());
+
+            Console.Write("Delay between tests (ms) >");
+
+            int delay = int.Parse(Console.ReadLine());
+
+            Console.Write("Number of test objects >");
+
+            int testObjectCount = int.Parse(Console.ReadLine());
+
+            Console.Write("Key to query >");
+
+            var key = Console.ReadLine();
+
+            var count = 0;
+
+            while (true)
+            {
+                var testObjects = CreateObjects(testObjectCount);
+
+                var binaryKey = $"{key}-binary";
+
+                var jsonKey = $"{key}-json";
+
+                var timer = new Stopwatch();
+                timer.Start();
+
+                await _redisClient.StoreAsync(binaryKey, testObjects, TimeSpan.FromSeconds(60));
+
+                var result = await _redisClient.GetAsync<Dictionary<int, POCOTest>>(binaryKey);
+
+                timer.Stop();
+
+                var ping = await _redisClient.Ping();
+
+                string logMessage = $"{count}|{key}:{result}: binary get completed in {decimal.Divide(timer.ElapsedTicks, TimeSpan.TicksPerMillisecond)} ms {timer.ElapsedTicks} ticks (current ping {decimal.Divide(ping.Ticks, TimeSpan.TicksPerMillisecond)} ms {ping.Ticks} ticks)";
+                Console.WriteLine(logMessage);
+                _logger.LogInformation(logMessage);
+
+                timer.Start();
+
+                await _redisClient.StoreAsync(jsonKey, testObjects, TimeSpan.FromSeconds(60), binary: false);
+
+                result = await _redisClient.GetAsync<Dictionary<int, POCOTest>>(jsonKey, binary: false);
+
+                timer.Stop();
+
+                ping = await _redisClient.Ping();
+
+                logMessage = $"{count}|{key}:{result}: json get completed in {decimal.Divide(timer.ElapsedTicks, TimeSpan.TicksPerMillisecond)} ms {timer.ElapsedTicks} ticks (current ping {decimal.Divide(ping.Ticks, TimeSpan.TicksPerMillisecond)} ms {ping.Ticks} ticks)";
+                Console.WriteLine(logMessage);
+                _logger.LogInformation(logMessage);
+
+                if (iterations > 0 && count >= iterations - 1)
+                {
+                    Console.WriteLine("All done");
+                    break;
+                }
+
+                System.Threading.Thread.Sleep(delay);
+
+                count++;
+            }
+
+            Console.WriteLine("---Press any key---");
+            Console.ReadKey();
+        }
+
+        private Dictionary<int,POCOTest> CreateObjects(int count)
+        {
+            var result = new Dictionary<int, POCOTest>();
+
+            var random = new Random(count);
+
+            for (int i = 0; i < count; i++)
+            {
+                var children = new List<POCOChild>();
+                
+                for (int j = 0; j < random.Next(0, 10); j++)
+                {
+                    children.Add(new POCOChild { ID = j, Name = Guid.NewGuid().ToString() });
+                }
+
+                result[i] =new POCOTest { 
+                    ID = i,
+                    Name = Guid.NewGuid().ToString(),
+                    Price = new decimal(random.NextDouble()),
+                    Children = children
+                };
+            }
+
+            return result;
+        }
+    }
+
+    [Serializable]
+    public class POCOTest
+    {
+        public int ID { get; set; }
+        public string Name { get; set; }
+        public decimal Price { get; set; }
+        public List<POCOChild> Children { get; set; }
+    }
+
+    [Serializable]
+    public class POCOChild
+    {
+        public int ID { get; set; }
+        public string Name { get; set; }
     }
 }

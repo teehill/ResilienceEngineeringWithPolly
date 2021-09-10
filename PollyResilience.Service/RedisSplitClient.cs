@@ -80,10 +80,17 @@ namespace PollyResilience.Service
             _writeDatabase = _writeMultiplexer.Value.GetDatabase();
             _readDatabase = _readMultiplexer.Value.GetDatabase();
 
-
             var connectionLogs = logwriter.ToString();
             _logger.LogDebug(connectionLogs);
             logwriter.Flush();
+        }
+
+        public string GetServerName()
+        {
+            var writePortIndex = _writeMultiplexer.Value.Configuration.IndexOf(':');
+            var readPortIndex = _readMultiplexer.Value.Configuration.IndexOf(':');
+
+            return _writeMultiplexer.Value.Configuration.Substring(0, writePortIndex) + " | " + _readMultiplexer.Value.Configuration.Substring(0, readPortIndex);
         }
 
         public async Task<List<string>> GetKeys(string query = "*")
@@ -208,6 +215,31 @@ namespace PollyResilience.Service
             X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
             return true;
+        }
+
+        public Task<bool> StoreAsync(string key, object value, TimeSpan expiresAt)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<T> GetAsync<T>(string key)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<bool> StoreAsync(string key, object value, TimeSpan expiresAt, bool binary = true)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<T> GetAsync<T>(string key, bool binary = true)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<ClientInfo[]> GetClientList(EndPoint serverEndpoint)
+        {
+            throw new NotImplementedException();
         }
     }
 }
